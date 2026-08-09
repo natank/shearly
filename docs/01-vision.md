@@ -401,6 +401,8 @@ D-1 and D-4 form the provider pitch together: a 20% commission is defensible in 
 
 ## 10. Next Step
 
-On approval, proceed to **Phase 2 — Requirements** (`docs/02-requirements.md`): epics and user stories with acceptance criteria and story IDs, covering the full lifecycle in §7, each tagged MVP or Post-MVP, plus non-functional requirements.
+On approval, proceed to the next documentation-process deliverable — **MVP Requirements** (`docs/mvp/02-requirements.md`): epics and user stories with acceptance criteria and story IDs, covering the full lifecycle in §7, each tagged MVP or Post-MVP, plus non-functional requirements.
 
-The five working defaults in §9 (D-1 through D-5) are resolved with stated reasoning and unblock Phase 2. They are bets rather than settled policy — each should be confirmed or overridden during Phase 2 review, where they turn into concrete acceptance criteria for pricing, cancellation, vetting, and discovery stories.
+(Not to be confused with the product roadmap's "Phase 2" in §8, which is post-MVP scope — conversational booking, agentic ranking. This next document is still MVP-scoped.)
+
+The five working defaults in §9 (D-1 through D-5) are resolved with stated reasoning and unblock this next document. They are bets rather than settled policy — each should be confirmed or overridden during requirements review, where they turn into concrete acceptance criteria for pricing, cancellation, vetting, and discovery stories.
