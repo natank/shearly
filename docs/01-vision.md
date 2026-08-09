@@ -319,14 +319,78 @@ Per the kickoff's requirement to state judgment calls explicitly.
 4. **Commission is the only MVP revenue mechanism.** No subscriptions, listing fees, or promoted placement.
 5. **Manual vetting is acceptable at MVP volume.** Trust is a principle, but automation of it is Phase 3.
 6. **Responsive web only.** Native apps deferred to Phase 4, contingent on data.
+7. **Five commercial and policy defaults are set below** (D-1 through D-5), covering commission, travel, cancellation, vetting, and radius. The kickoff specified none of them; they are resolved here so Phase 2 is not blocked, and each carries its reasoning and a revisit trigger.
 
-### Open questions for founder decision
+### Working defaults (founder to override)
 
-1. **Commission rate.** Not specified anywhere in the kickoff. Affects provider onboarding pitch and unit economics. Needed by Phase 2 (Requirements) for payment-split stories.
-2. **Who absorbs travel cost?** Provider, customer via a travel line item, or platform via a service-radius cap. Materially affects pricing display and the honest-pricing principle (§5.5). Needed by Phase 2.
-3. **Cancellation and refund policy.** Free-cancellation window, provider-cancellation penalty, no-show handling. Drives real requirements and cannot be deferred past Phase 2.
-4. **Vetting bar.** What must a provider present — certification, insurance, portfolio, in-person interview? Defines the meaning of "vetted," which §5.2 treats as load-bearing.
-5. **Service radius.** The maximum travel distance that keeps unit economics intact. Constrains discovery and ranking design in Phase 3.
+The kickoff does not specify these, and each blocks specific Phase 2 stories. Rather than leave Phase 2 waiting, each is resolved below with a defensible default and its reasoning. **These are bets, not settled policy** — every one is a founder decision, and overriding any of them changes requirements but not architecture.
+
+#### D-1. Commission: 20% of service price, taken from the provider
+
+The platform charges the provider 20% of the service price on each completed booking. The customer sees one price; the provider sees the gross, the fee, and the net.
+
+*Reasoning.* Twenty percent sits at the established midpoint for at-home service marketplaces — enough to fund payment processing, acquisition, and ops, low enough that it beats chair rent for the target provider. That comparison is the pitch: chair rent is a fixed weekly cost paid whether or not anyone sits down, while commission is charged only on money actually earned. A provider doing light volume is strictly better off; a provider at high volume is trading margin for zero downside risk and zero acquisition work.
+
+Charging the provider rather than the customer keeps the customer-facing price clean, which the honest-pricing principle (§5.5) requires.
+
+*Revisit when:* provider acquisition stalls at onboarding, or provider churn concentrates among high-volume providers — both signal the rate is wrong for the supply side.
+
+#### D-2. Travel: included in the price, bounded by radius
+
+No travel line item. The provider sets service prices that account for travel, and the platform enforces a service radius (D-5) so travel stays bounded and roughly uniform. The price shown at browse time is the price charged.
+
+*Reasoning.* A distance-based travel fee is the honest-pricing principle's (§5.5) worst enemy — it makes browse-time prices provisional, and prices that change at checkout are the fastest way to lose trust in a marketplace. Bounding the radius makes travel cost roughly constant, which makes bundling it into the price accurate rather than a subsidy.
+
+This pushes a real cost onto providers, which is why it only works with the radius cap. Without D-5, providers absorb unbounded travel and the arrangement collapses.
+
+*Revisit when:* providers systematically decline distant bookings inside the radius — that is the signal the bundled price no longer covers travel at the edge.
+
+#### D-3. Cancellation: free until 12 hours out, then charged
+
+| Event | Customer outcome | Provider outcome |
+|---|---|---|
+| Customer cancels >12h before | Full refund | No earning, slot released |
+| Customer cancels <12h before | 50% charged | 50% of normal earning |
+| Customer no-show | Full price charged | Full earning |
+| Provider cancels, any time | Full refund + rebooking assistance | Counted against provider standing |
+| Provider no-show | Full refund | Counted against standing; repeat = removal |
+
+*Reasoning.* Twelve hours is long enough for a provider to refill an evening slot and short enough that same-day booking — a core use case — is not discouraged. The asymmetry is deliberate: a customer cancellation costs the provider a slot, while a provider cancellation costs the customer a plan they had already built their day around, and it damages platform trust rather than one person's schedule. Provider-side failures are handled through standing rather than fees because charging a provider is a poor lever early on, when supply is the scarce side.
+
+*Revisit when:* late cancellations exceed roughly one in ten bookings, or provider standing penalties are visibly driving supply away.
+
+#### D-4. Vetting: identity, credential, portfolio, interview
+
+Four requirements, all before a provider is listed:
+
+1. **Government ID** — verified against the payout account name.
+2. **Professional credential** — a barbering or hairdressing certification, or documented equivalent experience where local licensing does not apply.
+3. **Portfolio** — a minimum of five work photos, reviewed for plausibility and quality.
+4. **Video interview** — a short live call with the founder covering professionalism, home-service conduct, and expectations.
+
+A listed provider displays a "Verified" badge with these criteria stated plainly. Insurance is recommended and surfaced on the profile when present, but is not a listing requirement at MVP.
+
+*Reasoning.* §5.2 treats trust as designed rather than claimed, which requires "Verified" to mean something specific and legible. The interview is the highest-signal and least scalable component — appropriate precisely because MVP volume is low and the founder is doing this personally. It is also the step Phase 3 automation will most want to remove, so it should be doing real work now.
+
+Insurance stays optional because requiring it would meaningfully thin the initial supply pool for a risk that is low at MVP volume.
+
+*Revisit when:* vetting throughput becomes the constraint on supply growth — that is the Phase 3 automation trigger.
+
+#### D-5. Service radius: 15 km, provider-configurable downward
+
+Platform maximum of 15 km between provider base and customer address. Providers may set a smaller personal radius; none may exceed the platform cap. Customers outside every nearby provider's radius see an explicit "not yet in your area" state rather than an empty result list.
+
+*Reasoning.* Fifteen kilometers covers the Tel Aviv metropolitan corridor — the density argument that motivated the market recommendation in §4 — while keeping travel to roughly 20–30 minutes each way in normal traffic. That is the boundary where D-2's bundled-travel pricing stays honest. Beyond it, travel time stops being an acceptable share of a two-hour billable block, and the category's known failure mode is exactly this: expansion into sprawl destroying margin because travel time does not compress.
+
+Provider-configurable downward matters because a provider who only wants a 5 km radius is a better provider inside it.
+
+*Revisit when:* a second market with different density launches (Phase 4) — this number is market-specific and belongs in market configuration, not in code.
+
+### How these interact
+
+D-2 and D-5 are a single decision in two parts: bundled travel pricing is only honest because the radius is capped, and the cap is only tolerable because providers aren't separately charged for travel. Changing either one requires revisiting the other.
+
+D-1 and D-4 form the provider pitch together: a 20% commission is defensible in exchange for genuine vetting that makes the badge worth carrying. Weakening vetting weakens what the commission buys.
 
 ### Flagged for later phases
 
@@ -339,4 +403,4 @@ Per the kickoff's requirement to state judgment calls explicitly.
 
 On approval, proceed to **Phase 2 — Requirements** (`docs/02-requirements.md`): epics and user stories with acceptance criteria and story IDs, covering the full lifecycle in §7, each tagged MVP or Post-MVP, plus non-functional requirements.
 
-The five open questions in §9 should be resolved before or during Phase 2 — each one blocks specific stories.
+The five working defaults in §9 (D-1 through D-5) are resolved with stated reasoning and unblock Phase 2. They are bets rather than settled policy — each should be confirmed or overridden during Phase 2 review, where they turn into concrete acceptance criteria for pricing, cancellation, vetting, and discovery stories.
