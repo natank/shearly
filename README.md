@@ -22,7 +22,7 @@ pnpm nx run-many -t serve -p web,api,admin
 | web                | http://localhost:3000/en and /he                   |
 | admin              | http://localhost:4300                              |
 | api                | http://localhost:4000/health                       |
-| Postgres (PostGIS) | localhost:5432 (`shearly` / `shearly` / `shearly`) |
+| Postgres           | localhost:5432 (`shearly` / `shearly` / `shearly`) |
 | Mailpit SMTP / UI  | 1025 / 8025                                        |
 | Geocoder stub      | http://localhost:3001/geocode?q=tel-aviv           |
 

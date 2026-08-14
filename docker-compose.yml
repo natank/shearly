@@ -3,8 +3,9 @@
 
 services:
   postgres:
-    # Official postgis/postgis:16-3.5 is amd64-only. This GHCR image is multi-arch (Apple Silicon).
-    image: ghcr.io/baosystems/postgis:16-3.5
+    # Official postgis/postgis is amd64-only. GHCR multi-arch images fail TLS in some Podman VMs.
+    # Vanilla Postgres 16 is arm64 on Docker Hub; PostGIS is added when geo lands (M3).
+    image: docker.io/library/postgres:16
     environment:
       POSTGRES_USER: shearly
       POSTGRES_PASSWORD: shearly
