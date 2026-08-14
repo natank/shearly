@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/domain-ranking",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/ranking/src",
+  "projectType": "library",
+  "tags": ["type:domain"]
+}

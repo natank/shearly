@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/domain-booking-state-machine",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/booking-state-machine/src",
+  "projectType": "library",
+  "tags": ["type:domain"]
+}

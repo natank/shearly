@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/shared-observability",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/observability/src",
+  "projectType": "library",
+  "tags": ["type:shared"]
+}

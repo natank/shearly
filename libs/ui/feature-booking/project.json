@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/feature-booking",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/feature-booking/src",
+  "projectType": "library",
+  "tags": ["type:feature"]
+}

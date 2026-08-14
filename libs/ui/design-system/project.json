@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/ui-design-system",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/design-system/src",
+  "projectType": "library",
+  "tags": ["type:ui"]
+}

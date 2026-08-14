@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/feature-discovery",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/feature-discovery/src",
+  "projectType": "library",
+  "tags": ["type:feature"]
+}

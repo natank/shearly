@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/out-tsc/tools/architecture",
+    "rootDir": "src",
+    "types": ["node", "vitest/globals"],
+    "declaration": true,
+    "composite": true
+  },
+  "include": ["src/**/*.ts"]
+}

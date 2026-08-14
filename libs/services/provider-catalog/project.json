@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/services-provider-catalog",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/services/provider-catalog/src",
+  "projectType": "library",
+  "tags": ["type:service"]
+}

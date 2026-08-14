@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+.nx
+.vscode/*
+!.vscode/extensions.json
+.env
+.env.local
+*.tsbuildinfo
+.DS_Store

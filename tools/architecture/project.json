@@ -1,0 +1,15 @@
+{
+  "name": "architecture",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/architecture/src",
+  "projectType": "library",
+  "tags": ["type:shared"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "tools/architecture/vitest.config.ts"
+      }
+    }
+  }
+}

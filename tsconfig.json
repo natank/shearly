@@ -1,0 +1,93 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    {
+      "path": "./libs/domain/booking-state-machine"
+    },
+    {
+      "path": "./libs/contracts/provider-catalog"
+    },
+    {
+      "path": "./libs/services/provider-catalog"
+    },
+    {
+      "path": "./libs/contracts/notifications"
+    },
+    {
+      "path": "./libs/domain/slot-computation"
+    },
+    {
+      "path": "./libs/contracts/availability"
+    },
+    {
+      "path": "./libs/services/notifications"
+    },
+    {
+      "path": "./tools/architecture-fixtures"
+    },
+    {
+      "path": "./libs/services/availability"
+    },
+    {
+      "path": "./libs/ui/feature-discovery"
+    },
+    {
+      "path": "./libs/shared/observability"
+    },
+    {
+      "path": "./libs/ui/feature-provider"
+    },
+    {
+      "path": "./libs/contracts/identity"
+    },
+    {
+      "path": "./libs/contracts/payments"
+    },
+    {
+      "path": "./libs/ui/feature-account"
+    },
+    {
+      "path": "./libs/ui/feature-booking"
+    },
+    {
+      "path": "./libs/contracts/booking"
+    },
+    {
+      "path": "./libs/services/identity"
+    },
+    {
+      "path": "./libs/services/payments"
+    },
+    {
+      "path": "./libs/services/booking"
+    },
+    {
+      "path": "./libs/ui/design-system"
+    },
+    {
+      "path": "./libs/domain/pricing"
+    },
+    {
+      "path": "./libs/domain/ranking"
+    },
+    {
+      "path": "./libs/shared/testing"
+    },
+    {
+      "path": "./libs/shared/config"
+    },
+    {
+      "path": "./libs/shared/errors"
+    },
+    {
+      "path": "./libs/shared/events"
+    },
+    {
+      "path": "./tools/architecture"
+    },
+    {
+      "path": "./libs/ui/i18n"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+packages:
+  - 'libs/services/*'
+  - 'libs/contracts/*'
+  - 'libs/domain/*'
+  - 'libs/shared/*'
+  - 'libs/ui/*'
+  - 'tools/*'

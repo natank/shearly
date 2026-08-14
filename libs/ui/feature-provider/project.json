@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/feature-provider",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/feature-provider/src",
+  "projectType": "library",
+  "tags": ["type:feature"]
+}

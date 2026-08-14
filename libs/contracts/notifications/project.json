@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/contracts-notifications",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contracts/notifications/src",
+  "projectType": "library",
+  "tags": ["type:contract"]
+}

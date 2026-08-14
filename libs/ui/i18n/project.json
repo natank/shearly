@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/ui-i18n",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/i18n/src",
+  "projectType": "library",
+  "tags": ["type:ui"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/domain-pricing",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/pricing/src",
+  "projectType": "library",
+  "tags": ["type:domain"]
+}
