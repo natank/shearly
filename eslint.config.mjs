@@ -10,6 +10,7 @@ export default [
       '**/node_modules',
       '**/.nx',
       '**/.next',
+      '**/next-env.d.ts',
       '**/test-results',
       '**/playwright-report',
     ],
