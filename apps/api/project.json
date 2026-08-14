@@ -12,6 +12,13 @@
         "cwd": "apps/api"
       }
     },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --build tsconfig.json --emitDeclarationOnly",
+        "cwd": "apps/api"
+      }
+    },
     "test": {
       "executor": "@nx/vitest:test",
       "options": {

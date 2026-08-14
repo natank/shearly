@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/domain/pricing/src",
   "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/domain/pricing/vitest.config.ts"
+      }
+    }
+  },
   "tags": ["type:domain"]
 }

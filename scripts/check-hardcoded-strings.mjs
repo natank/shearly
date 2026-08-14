@@ -2,7 +2,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 
-const roots = ['apps/web', 'apps/admin', 'libs/ui/feature-discovery', 'libs/ui/feature-booking', 'libs/ui/feature-provider', 'libs/ui/feature-account'];
+const roots = [
+  'apps/web',
+  'apps/admin',
+  'libs/ui/feature-discovery',
+  'libs/ui/feature-booking',
+  'libs/ui/feature-provider',
+  'libs/ui/feature-account',
+];
 
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {

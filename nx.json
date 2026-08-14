@@ -29,7 +29,7 @@
           "targetName": "typecheck"
         }
       },
-      "exclude": ["apps/web/**", "apps/admin/**"]
+      "exclude": ["apps/web/**", "apps/admin/**", "apps/web-e2e/**"]
     },
     {
       "plugin": "@nx/eslint/plugin",

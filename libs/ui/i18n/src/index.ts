@@ -1,4 +1,4 @@
-export { defaultLocale, getTextDirection, isLocale, locales } from './locales.js';
-export type { Locale } from './locales.js';
-export { loadCommonMessages } from './load-messages.js';
-export { routing } from './routing.js';
+export { defaultLocale, getTextDirection, isLocale, locales } from './locales';
+export type { Locale } from './locales';
+export { loadCommonMessages } from './load-messages';
+export { routing } from './routing';

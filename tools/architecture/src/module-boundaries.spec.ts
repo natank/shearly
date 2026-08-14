@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { ARCHITECTURE_SUITE_NAME } from './index.js';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,10 @@ function walkTsFiles(dir: string): string[] {
 }
 
 describe('module boundaries', () => {
+  it('exports the suite name', () => {
+    expect(ARCHITECTURE_SUITE_NAME).toBe('architecture');
+  });
+
   it('rejects type:app-web importing a type:service', async () => {
     const eslint = new ESLint({ cwd: repoRoot });
     const fixture = join(repoRoot, 'tools/architecture-fixtures/src/illegal-service-import.ts');

@@ -1,4 +1,4 @@
-import type { Locale } from './locales.js';
+import type { Locale } from './locales';
 
 export async function loadCommonMessages(locale: Locale) {
   switch (locale) {

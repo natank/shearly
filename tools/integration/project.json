@@ -1,0 +1,15 @@
+{
+  "name": "integration",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/integration/src",
+  "projectType": "library",
+  "tags": ["type:shared"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "tools/integration/vitest.config.ts"
+      }
+    }
+  }
+}
