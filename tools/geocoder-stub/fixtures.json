@@ -1,0 +1,12 @@
+{
+  "tel-aviv": {
+    "lat": 32.0853,
+    "lng": 34.7818,
+    "label": "Tel Aviv-Yafo"
+  },
+  "jerusalem": {
+    "lat": 31.7683,
+    "lng": 35.2137,
+    "label": "Jerusalem"
+  }
+}
