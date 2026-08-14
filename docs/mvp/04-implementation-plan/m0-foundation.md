@@ -6,8 +6,8 @@
 **Requirements:** no functional stories. NFRs below.  
 **Depends on:** nothing (first milestone)  
 **Unlocks:** M1–M5  
-**Status:** Draft, pending review  
-**Implementation:** not started — kickoff §7 go-ahead required after the Plan is approved
+**Status:** Complete  
+**Implementation:** shipped on `main` 2026-08-14 (`6b123c5`, merge of [#14](https://github.com/natank/shearly/pull/14))
 
 ---
 
@@ -78,6 +78,21 @@ M0-P3 Compose   M0-P4 design system + i18n/RTL
 ```
 
 `M0-P3` and `M0-P4` may proceed in parallel after `M0-P2`. Nothing else is parallel.
+
+### Delivery (as shipped)
+
+| Plan ID | PR | Title | Merged |
+|---|---|---|---|
+| M0-P1 | [#7](https://github.com/natank/shearly/pull/7) | Nx workspace, tags, and lib stubs | 2026-08-14 |
+| M0-P2 | [#8](https://github.com/natank/shearly/pull/8) | App shells (web, admin, api) | 2026-08-14 |
+| M0-P3 | [#9](https://github.com/natank/shearly/pull/9) | Local Compose and geocoder stub | 2026-08-14 |
+| M0-P4 | [#10](https://github.com/natank/shearly/pull/10) | Design system, i18n, and RTL | 2026-08-14 |
+| M0-P5 | [#11](https://github.com/natank/shearly/pull/11) | Config and error taxonomy | 2026-08-14 |
+| M0-P6 | [#12](https://github.com/natank/shearly/pull/12) | CI and locale smoke E2E | 2026-08-14 |
+| — | [#13](https://github.com/natank/shearly/pull/13) | Compose images for Apple Silicon | 2026-08-14 |
+| M0-P7 | [#14](https://github.com/natank/shearly/pull/14) | Container image and preview-ready deploy workflow | 2026-08-14 |
+
+CI on the #14 merge to `main`: workflow **CI** (gates 1–8) success; workflow **Image** (build + `/health` smoke) success.
 
 ### M0-P1 — Workspace, tags, empty graph
 
@@ -246,24 +261,39 @@ No migrate step yet. Add it in M1 with the `identity` schema.
 
 ## 6. Exit checklist
 
-Copy of the master M0 exit, made testable.
+Copy of the master M0 exit, made testable. Validated 2026-08-15 against `main` @ `6b123c5`.
 
-- [ ] `pnpm install && docker compose up -d && pnpm nx run-many -t serve -p web,api,admin` works on a clean clone from `.env.example`
-- [ ] `/he` renders RTL (`dir="rtl"`); `/en` renders LTR
-- [ ] Both pages use tokenized type/color — no ad-hoc hex in `apps/web`
-- [ ] ESLint `enforce-module-boundaries`: `type:app-web` → `type:service` is an error; `type:service` → `type:service` is an error; `type:domain` → anything but `type:domain` is an error
-- [ ] Architecture fixture proves the web→booking-service violation is caught
-- [ ] `process.env` outside `libs/shared/config` is a lint error
-- [ ] Hardcoded JSX display text is a CI failure
-- [ ] Physical direction properties are a lint error
-- [ ] CI stages 1–8 run on the PR; merge is blocked on them
-- [ ] Playwright smoke passes in Hebrew and English
-- [ ] Secret scan is in CI; `.env` is not in git
-- [ ] Coverage thresholds are configured (even if stub libs make them easy)
-- [ ] Docker image builds
-- [ ] Deploy workflow exists; skips cleanly without AWS secrets
+- [x] `pnpm install && docker compose up -d && pnpm nx run-many -t serve -p web,api,admin` works on a clean clone from `.env.example` — documented in README; Compose + serve targets exist
+- [x] `/he` renders RTL (`dir="rtl"`); `/en` renders LTR — Playwright `apps/web-e2e/src/locale-smoke.spec.ts`; `getTextDirection` unit tests
+- [x] Both pages use tokenized type/color — no ad-hoc hex in `apps/web`
+- [x] ESLint `enforce-module-boundaries`: `type:app-web` → `type:service` is an error; `type:service` → `type:service` is an error; `type:domain` → anything but `type:domain` is an error
+- [x] Architecture fixture proves the web→booking-service violation is caught — `tools/architecture` + `tools/architecture-fixtures`
+- [x] `process.env` outside `libs/shared/config` is a lint error (exempt: config lib, integration, Playwright, Vitest/Tailwind configs)
+- [x] Hardcoded JSX display text is a CI failure — `pnpm check:i18n`
+- [x] Physical direction properties are a lint error — `pnpm check:rtl`
+- [x] CI stages 1–8 run on the PR
+- [ ] Merge is **blocked** on those stages — residual: `main` has branch protection (`strict`, no force-push, enforce admins) but **no required status checks**. Workflows ran and were green; GitHub will still allow merge if they are red. Wire `gates 1–8` and `build and smoke` as required checks.
+- [x] Playwright smoke passes in Hebrew and English — green on #14 and on `main`
+- [x] Secret scan is in CI (gitleaks + GitGuardian); `.env` is not in git
+- [x] Coverage thresholds are configured (90% domain + payments, 80% else)
+- [x] Docker image builds — Image workflow green on `main`
+- [x] Deploy workflow exists; skips cleanly without AWS secrets
 
 Master demo: “Empty app in HE + EN, CI green, one-command local.”
+
+### Accepted deviations from the written sequence
+
+None change the master cuts. Recorded so M1 does not “fix” them by accident.
+
+| Plan said | Shipped | Why |
+|---|---|---|
+| Compose Postgres **PostGIS** | Local: `postgres:16`. CI: `postgis/postgis:16-3.5` | Multi-arch / Podman Hub TLS. No geo queries until M3; add PostGIS locally with DIS-001 |
+| Mailhog | Mailpit on the same ports (1025 / 8025) | Mailhog is amd64-only |
+| Stripe CLI always up | `docker compose --profile stripe` | No live key in M0 |
+| Admin URL pick in P2 | `apps/admin` on `:4300` | M0-Q1 default |
+| Fastify or Hono | Hono | M0-Q2 default |
+| `apps/api-e2e` optional | not created; `/health` is a unit test | Allowed by P6 |
+| ECR / preview | workflow skips with “No AWS creds” | M0-Q3 / DQ-2 |
 
 ---
 
@@ -299,11 +329,11 @@ Do not “just add” identity tables in M0 because Compose is up. That is M1.
 
 ## 9. Open on M0
 
-| # | Question | Default if unanswered |
+| # | Question | Resolution |
 |---|---|---|
-| **M0-Q1** | Admin URL: path `/admin` on the same Next app, or `apps/admin` as its own origin? | Keep `apps/admin` (design §3.1). Locally `:4300`; later ALB `/admin` or `admin.` (OQ-8) |
-| **M0-Q2** | API framework inside `apps/api`? | Fastify or Hono — pick one in P2 and keep it. Not Nest (ceremony), not raw `node:http` (we will grow) |
-| **M0-Q3** | Ship P7 (ECS preview) before AWS account exists? | Yes: Dockerfile + workflow that skips without secrets |
+| **M0-Q1** | Admin URL: path `/admin` on the same Next app, or `apps/admin` as its own origin? | **Shipped:** `apps/admin` on `:4300`. Later ALB `/admin` or `admin.` (OQ-8) |
+| **M0-Q2** | API framework inside `apps/api`? | **Shipped:** Hono. Keep it. |
+| **M0-Q3** | Ship P7 (ECS preview) before AWS account exists? | **Shipped:** Dockerfile + Image workflow; ECR push skips without secrets |
 
 None changes the master cuts.
 
@@ -311,4 +341,4 @@ None changes the master cuts.
 
 ## 10. Next
 
-Accept this plan (or mark Qs). Then write [`m1-accounts.md`](./m1-accounts.md). Do not start `m0/*` implementation PRs until the Plan folder is approved **and** kickoff §7 go-ahead is given.
+M0 is complete. M1 plan is accepted — implement [`m1-accounts.md`](./m1-accounts.md). Do not write M2–M5 plans yet (master §6). Optional hygiene: add required status checks `gates 1–8` and `build and smoke` on `main` (exit residual in §6).
