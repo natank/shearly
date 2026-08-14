@@ -9,7 +9,7 @@ export SMTP_URL="${SMTP_URL:-smtp://127.0.0.1:1025}"
 export PORT="${PORT:-3000}"
 export HOSTNAME="${HOSTNAME:-0.0.0.0}"
 
-node /app/api.js &
+node /app/api.cjs &
 api_pid=$!
 
 node /app/apps/web/server.js &
