@@ -17,14 +17,14 @@ docker compose up -d
 pnpm nx run-many -t serve -p web,api,admin
 ```
 
-| Surface            | URL                                                |
-| ------------------ | -------------------------------------------------- |
-| web                | http://localhost:3000/en and /he                   |
-| admin              | http://localhost:4300                              |
-| api                | http://localhost:4000/health                       |
-| Postgres           | localhost:5432 (`shearly` / `shearly` / `shearly`) |
-| Mailpit SMTP / UI  | 1025 / 8025                                        |
-| Geocoder stub      | http://localhost:3001/geocode?q=tel-aviv           |
+| Surface           | URL                                                |
+| ----------------- | -------------------------------------------------- |
+| web               | http://localhost:3000/en and /he                   |
+| admin             | http://localhost:4300                              |
+| api               | http://localhost:4000/health                       |
+| Postgres          | localhost:5432 (`shearly` / `shearly` / `shearly`) |
+| Mailpit SMTP / UI | 1025 / 8025                                        |
+| Geocoder stub     | http://localhost:3001/geocode?q=tel-aviv           |
 
 Stripe CLI is opt-in: `docker compose --profile stripe up -d` with `STRIPE_API_KEY`. Image pulls happen inside the Podman VM; Hub TLS errors are a VM/CA issue, not this file.
 
