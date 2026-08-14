@@ -82,6 +82,7 @@ export default [
       'libs/shared/config/**/*.ts',
       'tools/integration/**/*.ts',
       'apps/web-e2e/**/*.ts',
+      '**/*.spec.ts',
       '**/vitest.config.ts',
       '**/playwright.config.ts',
       '**/tailwind.config.ts',

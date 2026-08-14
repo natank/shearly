@@ -68,7 +68,9 @@ jobs:
         run: pnpm exec nx affected -t test --exclude=integration,web-e2e
 
       - name: 5. Integration
-        run: pnpm exec nx test integration
+        run: |
+          pnpm exec nx run api:migrate
+          pnpm exec nx test integration
 
       - name: 6. Build
         run: pnpm exec nx run-many -t build -p web,admin,api

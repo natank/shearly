@@ -17,6 +17,10 @@ describe('postgres smoke', () => {
     try {
       const result = await client.query('SELECT 1 AS ok');
       expect(result.rows[0]?.ok).toBe(1);
+      const schema = await client.query(
+        `SELECT 1 FROM information_schema.schemata WHERE schema_name = 'identity'`,
+      );
+      expect(schema.rowCount).toBe(1);
     } finally {
       await client.end();
     }

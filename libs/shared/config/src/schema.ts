@@ -11,6 +11,11 @@ export const envSchema = z.object({
   CURRENCY: z.string().min(1).default('ILS'),
   RADIUS_CAP_KM: z.coerce.number().positive().default(15),
   COMMISSION_RATE: z.coerce.number().min(0).max(1).default(0.2),
+  SESSION_TTL_HOURS: z.coerce.number().positive().default(24),
+  SESSION_COOKIE_NAME: z.string().min(1).default('shearly_session'),
+  PASSWORD_MIN_LENGTH: z.coerce.number().int().min(8).default(10),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  AUTH_RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -26,6 +31,11 @@ export type AppConfig = {
   currency: string;
   radiusCapKm: number;
   commissionRate: number;
+  sessionTtlHours: number;
+  sessionCookieName: string;
+  passwordMinLength: number;
+  authRateLimitMax: number;
+  authRateLimitWindowSec: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -40,5 +50,10 @@ export function toAppConfig(env: Env): AppConfig {
     currency: env.CURRENCY,
     radiusCapKm: env.RADIUS_CAP_KM,
     commissionRate: env.COMMISSION_RATE,
+    sessionTtlHours: env.SESSION_TTL_HOURS,
+    sessionCookieName: env.SESSION_COOKIE_NAME,
+    passwordMinLength: env.PASSWORD_MIN_LENGTH,
+    authRateLimitMax: env.AUTH_RATE_LIMIT_MAX,
+    authRateLimitWindowSec: env.AUTH_RATE_LIMIT_WINDOW_SEC,
   };
 }
