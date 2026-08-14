@@ -10,6 +10,9 @@
     ],
     "sharedGlobals": ["{workspaceRoot}/eslint.config.mjs", "{workspaceRoot}/tsconfig.base.json"]
   },
+  "sync": {
+    "disabledTaskSyncGenerators": ["@nx/js:typescript-sync"]
+  },
   "targetDefaults": {
     "lint": {
       "cache": true

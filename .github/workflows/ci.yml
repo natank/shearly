@@ -62,7 +62,7 @@ jobs:
           pnpm check:rtl
 
       - name: 3. Typecheck
-        run: pnpm exec nx affected -t typecheck
+        run: pnpm exec nx run-many -t typecheck --exclude=web-e2e
 
       - name: 4. Unit tests
         run: pnpm exec nx affected -t test --exclude=integration,web-e2e
