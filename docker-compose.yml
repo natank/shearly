@@ -1,0 +1,47 @@
+# Local external dependencies only (M0-P3). No app processes.
+# Stripe CLI is optional: docker compose --profile stripe up -d
+
+services:
+  postgres:
+    image: docker.io/postgis/postgis:16-3.5
+    environment:
+      POSTGRES_USER: shearly
+      POSTGRES_PASSWORD: shearly
+      POSTGRES_DB: shearly
+    ports:
+      - '5432:5432'
+    volumes:
+      - shearly_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U shearly -d shearly']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: docker.io/mailhog/mailhog:v1.0.1
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+
+  geocoder-stub:
+    image: docker.io/library/node:22-alpine
+    working_dir: /app
+    command: ['node', 'server.mjs']
+    volumes:
+      - ./tools/geocoder-stub:/app:ro
+    ports:
+      - '3001:3001'
+
+  stripe-cli:
+    image: docker.io/stripe/stripe-cli:latest
+    profiles: ['stripe']
+    command:
+      - listen
+      - --forward-to
+      - host.containers.internal:3000/webhooks/stripe
+    environment:
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+
+volumes:
+  shearly_pg:
