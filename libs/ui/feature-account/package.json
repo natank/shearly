@@ -4,5 +4,9 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "types": "./src/index.ts"
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@shearly/contracts-identity": "workspace:*",
+    "@shearly/ui-design-system": "workspace:*"
+  }
 }

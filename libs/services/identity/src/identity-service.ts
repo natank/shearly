@@ -108,6 +108,19 @@ export class IdentityService {
     ]);
   }
 
+  async ensureAdmin(email: string, password: string): Promise<void> {
+    const existing = await this.findByEmail(email);
+    if (existing) {
+      return;
+    }
+    const passwordHash = await hashPassword(password);
+    await this.pool.query(
+      `INSERT INTO identity.accounts (email, password_hash, role, locale, provider_vetting_status)
+       VALUES ($1, $2, 'admin', 'en', NULL)`,
+      [email.trim(), passwordHash],
+    );
+  }
+
   async requestPasswordReset(input: { email: string; locale: Locale; ip: string }): Promise<void> {
     await this.enforceRateLimit('reset', input.ip);
     const account = await this.findByEmail(input.email);

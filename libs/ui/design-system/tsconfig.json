@@ -7,7 +7,8 @@
     "jsx": "react-jsx",
     "lib": ["dom", "ES2022"],
     "declaration": true,
-    "composite": true
+    "composite": true,
+    "tsBuildInfoFile": "../../../dist/out-tsc/libs/ui/design-system/tsconfig.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

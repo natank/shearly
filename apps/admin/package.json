@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@shearly/contracts-identity": "workspace:*",
+    "@shearly/feature-account": "workspace:*",
     "@shearly/ui-design-system": "workspace:*",
     "@shearly/ui-i18n": "workspace:*"
   }

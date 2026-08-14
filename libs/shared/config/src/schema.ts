@@ -21,6 +21,8 @@ export const envSchema = z.object({
   GUEST_DRAFT_SECRET: z.string().min(8).default('dev-guest-draft-secret'),
   GUEST_DRAFT_TTL_HOURS: z.coerce.number().positive().default(2),
   GUEST_DRAFT_COOKIE_NAME: z.string().min(1).default('shearly_guest_draft'),
+  ADMIN_SEED_EMAIL: z.string().email().default('admin@shearly.local'),
+  ADMIN_SEED_PASSWORD: z.string().min(10).default('change-me-admin-10'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -46,6 +48,8 @@ export type AppConfig = {
   guestDraftSecret: string;
   guestDraftTtlHours: number;
   guestDraftCookieName: string;
+  adminSeedEmail: string;
+  adminSeedPassword: string;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -70,5 +74,7 @@ export function toAppConfig(env: Env): AppConfig {
     guestDraftSecret: env.GUEST_DRAFT_SECRET,
     guestDraftTtlHours: env.GUEST_DRAFT_TTL_HOURS,
     guestDraftCookieName: env.GUEST_DRAFT_COOKIE_NAME,
+    adminSeedEmail: env.ADMIN_SEED_EMAIL,
+    adminSeedPassword: env.ADMIN_SEED_PASSWORD,
   };
 }
