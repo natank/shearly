@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { migrateIdentity } from '@shearly/services-identity';
+import { migrateIdentity } from '@shearly/services-identity/migrate';
 import { createApp } from './app.js';
 import { compose } from './compose.js';
 

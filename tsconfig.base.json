@@ -20,6 +20,7 @@
     "baseUrl": ".",
     "paths": {
       "@shearly/services-identity": ["libs/services/identity/src/index.ts"],
+      "@shearly/services-identity/migrate": ["libs/services/identity/src/migrate.ts"],
       "@shearly/services-provider-catalog": ["libs/services/provider-catalog/src/index.ts"],
       "@shearly/services-availability": ["libs/services/availability/src/index.ts"],
       "@shearly/services-booking": ["libs/services/booking/src/index.ts"],

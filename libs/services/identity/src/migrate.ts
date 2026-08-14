@@ -17,7 +17,15 @@ export async function migrateIdentity(databaseUrl: string): Promise<string[]> {
   const applied: string[] = [];
   try {
     await client.query('BEGIN');
-    await client.query('CREATE SCHEMA IF NOT EXISTS identity');
+    await client.query(`
+      DO $identity_schema$
+      BEGIN
+        CREATE SCHEMA IF NOT EXISTS identity;
+      EXCEPTION
+        WHEN duplicate_schema THEN NULL;
+      END
+      $identity_schema$;
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS identity.schema_migrations (
         id text PRIMARY KEY,
