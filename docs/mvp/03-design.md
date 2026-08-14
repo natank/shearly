@@ -801,4 +801,4 @@ Requirements §16 Phase-3 flags after this revision: ranking seam specified; pay
 
 ## 16. Next Step
 
-On approval, proceed to **MVP Implementation Plan** (`docs/mvp/04-implementation-plan.md`): the concrete story slice for MVP, build sequencing and milestones, branch/PR workflow tied to the §10.1 gates, post-MVP roadmap, and a Definition of Done matching the submission bar. The plan should take this document — including §15 — as decided architecture, not re-open it.
+On approval, proceed to **MVP Implementation Plan** (`docs/mvp/04-implementation-plan/`): the concrete story slice for MVP, build sequencing and milestones, branch/PR workflow tied to the §10.1 gates, post-MVP roadmap, and a Definition of Done matching the submission bar. The plan should take this document — including §15 — as decided architecture, not re-open it.
