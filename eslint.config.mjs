@@ -84,9 +84,16 @@ export default [
       'apps/web-e2e/**/*.ts',
       '**/vitest.config.ts',
       '**/playwright.config.ts',
+      '**/tailwind.config.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    files: ['**/tailwind.config.ts'],
+    rules: {
+      '@nx/enforce-module-boundaries': 'off',
     },
   },
 ];

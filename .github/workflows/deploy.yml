@@ -1,0 +1,64 @@
+name: Image
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t shearly:ci .
+
+      - name: Smoke /health inside the image
+        run: |
+          docker run -d --name shearly-ci \
+            -e DATABASE_URL=postgres://shearly:shearly@127.0.0.1:5432/shearly \
+            -e GEOCODER_URL=http://127.0.0.1:3001 \
+            -e SMTP_URL=smtp://127.0.0.1:1025 \
+            -p 4000:4000 \
+            -p 3000:3000 \
+            shearly:ci
+          ok=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4000/health | grep -q '"ok":true'; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          docker logs shearly-ci || true
+          docker stop shearly-ci || true
+          if [ "$ok" != 1 ]; then
+            echo "API /health did not become ready"
+            exit 1
+          fi
+
+      - name: Push to ECR
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ] || [ -z "${AWS_REGION:-}" ] || [ -z "${ECR_REPOSITORY:-}" ]; then
+            echo "No AWS creds — skipping ECR push (M0-P7). Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, ECR_REPOSITORY to enable."
+            exit 0
+          fi
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$(echo "$ECR_REPOSITORY" | cut -d/ -f1)"
+          tag="${ECR_REPOSITORY}:${GITHUB_SHA}"
+          docker tag shearly:ci "$tag"
+          docker push "$tag"
+          echo "Pushed $tag"

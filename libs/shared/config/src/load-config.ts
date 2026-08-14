@@ -1,7 +1,9 @@
 import { config as loadDotenv } from 'dotenv';
 import { envSchema, toAppConfig, type AppConfig } from './schema.js';
 
-loadDotenv();
+if (process.env.NODE_ENV !== 'production') {
+  loadDotenv();
+}
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.safeParse(source);
