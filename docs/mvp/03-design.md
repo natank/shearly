@@ -1,9 +1,9 @@
 # Shearly MVP — Preliminary Design
 
-**Phase:** 3 of 4 (Preliminary Design)
+**Stage:** 3 of 4 (Preliminary Design)
 **Scope:** MVP architecture. Post-MVP concerns appear only where MVP must not foreclose them.
-**Status:** Draft, pending founder review
-**Source:** `docs/kickoff.md`, `docs/01-vision.md`, `docs/mvp/02-requirements.md`
+**Status:** Draft, revised after design review — pending founder review
+**Source:** `docs/kickoff.md`, `docs/mvp/mvp-kickoff.md`, `docs/01-vision.md`, `docs/mvp/02-requirements.md`
 
 ---
 
@@ -23,7 +23,7 @@
 
 ### The governing tension
 
-The kickoff fixes *microservices-oriented*. The vision fixes *polish over breadth* (§5.7) and a solo operator. Five independently deployed services would satisfy the first constraint by directly damaging the second: five deploy pipelines, five log streams, distributed transactions across booking and payments, and cross-service debugging — for one developer whose success criterion is a polished demo.
+The kickoff fixes *microservices-oriented*. The vision fixes *polish over breadth* (§5.7) and a solo operator. Six independently deployed services would satisfy the first constraint by directly damaging the second: six deploy pipelines, six log streams, and cross-service debugging — for one developer whose success criterion is a polished demo. One process does **not** erase the booking↔payments consistency problem; that saga is specified in §8.4.
 
 **This design resolves the tension structurally rather than by picking a side.** Service boundaries are real, enforced by tooling, and drawn where a distributed system would draw them. The *deployment topology* starts as a single unit. The boundaries are the architecture; the deployment count is a runtime decision that §11 makes reversible.
 
@@ -37,10 +37,10 @@ Six bounded contexts. Each owns its data, exposes a typed contract, and never re
 
 | Service | Owns | Why this boundary |
 |---|---|---|
-| **identity** | Accounts, sessions, roles, password lifecycle | Authentication is a distinct security perimeter; it changes for security reasons, not product reasons |
-| **provider-catalog** | Provider profiles, services, pricing, vetting state, portfolio | Read-heavy, cache-friendly, and the only public-facing read surface. Its scaling profile is opposite to booking's |
+| **identity** | Accounts, sessions, roles, password lifecycle, customer address book, guest drafts | Authentication is a distinct security perimeter; it changes for security reasons, not product reasons. Saved addresses are profile data, not booking data (§6.8) |
+| **provider-catalog** | Provider profiles, services, pricing, vetting state, portfolio, reviews | Read-heavy, cache-friendly, and the only public-facing read surface. Its scaling profile is opposite to booking's. Review *submission* is gated by `booking` (§2.4) |
 | **availability** | Availability rules, exceptions, slot computation, travel buffer | The most computationally distinct concern in the system; slot generation is an algorithm, not CRUD |
-| **booking** | Bookings, the state machine, slot holds, concurrency control | The transactional core. Owns the invariant that a slot is booked exactly once |
+| **booking** | Bookings, the state machine, slot holds, occupancy intervals, address snapshots | The transactional core. Owns the invariant that a provider's occupancy does not overlap |
 | **payments** | Stripe integration, authorizations, captures, refunds, commission ledger | Money. Isolated for auditability and because it is the highest-consequence failure domain |
 | **notifications** | Templates, dispatch, delivery state, retry | Purely reactive, entirely async, no synchronous callers. Trivially separable |
 
@@ -48,7 +48,7 @@ Six bounded contexts. Each owns its data, exposes a typed contract, and never re
 
 - **Reviews** live inside `provider-catalog`. A review has no lifecycle independent of the provider aggregate it rates, and splitting it would create a synchronous read dependency for every profile view.
 - **Admin/ops** is a frontend application over existing service contracts, not a service. It owns no data.
-- **Search/ranking** lives inside `provider-catalog` behind the seam defined in §4. It is an algorithm over catalog data, and at MVP volume it has no independent scaling need.
+- **Search/ranking** is not a service. The algorithm lives in `libs/domain/ranking` (§4). The single call site is the discovery composer in `apps/api` (§2.4). At MVP volume it has no independent scaling need.
 
 ### 2.2 Dependency direction
 
@@ -76,7 +76,9 @@ Dependencies point inward toward `identity` and outward toward `notifications`. 
                 └──────────────┘
 ```
 
-`booking` is the only service that orchestrates across others. This is deliberate: it is the transactional core, and concentrating orchestration there keeps the other services simple and independently reasonable.
+Write-side orchestration stays in `booking` (create, transitions, payments saga). **Read composition does not.** Discovery, go-live, and provider schedule assemble data from more than one context; that work lives in `apps/api`, not inside `provider-catalog` or `availability`. See §2.4.
+
+Services still do not import each other. Runtime calls go through `libs/contracts/*`. The diagram is the *write-ownership* graph, not the HTTP call graph.
 
 ### 2.3 Deployment topology at MVP
 
@@ -89,11 +91,26 @@ All six services deploy as **one containerized application** on ECS Fargate — 
 3. **Async communication is already async.** Events go through a real queue (§6.4), not in-process function calls. Notification dispatch and settlement are already decoupled in the way they would be if distributed.
 4. **Contracts are already network-shaped.** Service interfaces are defined as typed request/response contracts with no shared mutable state, so the in-process call can become an HTTP call without changing callers.
 
-**What this buys the solo founder:** one deploy, one log stream, one set of environment variables, local dev that starts with one command, and no distributed-transaction problem across `booking` and `payments` at MVP.
+**What this buys the solo founder:** one deploy, one log stream, one set of environment variables, and local dev that starts with one command. It does **not** buy a shared transaction across `booking` and `payments` — schema grants forbid that. Those two contexts stay consistent via the saga in §8.4, whether they share a process or not.
 
 **When to split** (§11 covers the mechanics): when a service needs independent scaling, an independent release cadence, or a different runtime. At MVP, none does.
 
 > **Assumption flagged.** This is the design's most consequential interpretation of a fixed constraint. The kickoff says "microservices-oriented architecture" — I read *oriented* as describing the code's structure, and have made deployment topology the reversible variable. If the intent was independently deployed services from day one, this section is what to reject, and §11 describes what changes.
+
+### 2.4 Composition root (`apps/api`)
+
+`apps/api` is the only process that constructs service implementations. It is also the **read composer** for flows that span contexts. Services remain write-owners of their data.
+
+| Flow | Composer does | Services still own |
+|---|---|---|
+| Discovery (DIS-001…005) | Load in-radius `APPROVED` providers from catalog; ask availability for next slots / occupancy; run `ProviderRanker` on the merged candidate set | Catalog: profiles, prices, ratings. Availability: rules, exceptions, slot computation |
+| Go-live gate (PRV-005) | AND of catalog (`APPROVED` + ≥1 service), payments (Connect onboarded), availability (≥1 bookable window) | Each prerequisite stays in its schema |
+| Review submit (RAT-001) | `booking` verifies the booking is `COMPLETED` and unreviewed, then calls `contracts/provider-catalog` to persist the review | Catalog stores the review and updates the stored aggregate |
+| Alternatives (BOK-003/004/006) | Same discovery composer, constrained to the original slot / service type | — |
+
+Ranking still has a **single call site** (§4.3). That site is the discovery composer in `apps/api`, not a catalog-internal query. The architecture test asserts no other module imports a concrete ranker.
+
+If synchronous fan-out on discovery becomes a latency problem, the same composer reads a catalog search projection fed by `AvailabilityChanged`, `PayoutAccountReady`, and `BookingCompleted`. That is an optimization behind the same contract, not a new service.
 
 ---
 
@@ -161,17 +178,23 @@ This means `booking` can depend on `contracts/payments` without depending on `li
 
 Nx tags with ESLint `enforce-module-boundaries`. Violations fail CI, not review.
 
-| Tag | May depend on |
-|---|---|
-| `type:app` | `type:feature`, `type:contract`, `type:ui`, `type:shared` |
-| `type:service` | `type:contract`, `type:domain`, `type:shared` |
-| `type:contract` | `type:contract`, `type:shared` |
-| `type:domain` | `type:domain` only — **no I/O, no infrastructure** |
-| `type:feature` | `type:ui`, `type:contract`, `type:shared` |
-| `type:ui` | `type:ui`, `type:shared` |
-| `type:shared` | `type:shared` |
+| Tag | Projects | May depend on |
+|---|---|---|
+| `type:app-web` | `apps/web`, `apps/admin` | `type:feature`, `type:contract`, `type:ui`, `type:shared` |
+| `type:app-api` | `apps/api` | `type:service`, `type:contract`, `type:domain`, `type:shared` |
+| `type:app-e2e` | `apps/web-e2e`, `apps/api-e2e` | `type:contract`, `type:shared` |
+| `type:service` | `libs/services/*` | `type:contract`, `type:domain`, `type:shared` |
+| `type:contract` | `libs/contracts/*` | `type:contract`, `type:shared` |
+| `type:domain` | `libs/domain/*` | `type:domain` only — **no I/O, no infrastructure** |
+| `type:feature` | `libs/ui/feature-*` | `type:ui`, `type:contract`, `type:shared` |
+| `type:ui` | `libs/ui/design-system`, `libs/ui/i18n` | `type:ui`, `type:shared` |
+| `type:shared` | `libs/shared/*` | `type:shared` |
 
 **The critical rule:** `type:service` may **not** depend on `type:service`. Cross-service communication goes through `type:contract` exclusively. This is the rule that makes §2.3's claim structurally true rather than aspirational.
+
+**The composition rule:** only `type:app-api` may depend on `type:service`. That is the only place implementations are constructed. `apps/web` and `apps/admin` talk to the API over HTTP using contract types — they never import a service library.
+
+A single `type:app` tag is forbidden: it cannot both host the Next.js UI and bind service implementations without either hiding the composition root from CI or letting the browser bundle import `libs/services/*`.
 
 `type:domain` having no I/O dependency is what makes the state machine (§7) and pricing logic exhaustively unit-testable without any test double.
 
@@ -221,7 +244,7 @@ Providers below the review-count threshold receive a neutral prior rather than a
 
 Four properties, each with a CI-enforced test:
 
-1. **Single call site.** `provider-catalog` resolves a `ProviderRanker` from configuration. An architecture test asserts no other module imports a concrete ranker implementation.
+1. **Single call site.** The discovery composer in `apps/api` (§2.4) resolves a `ProviderRanker` from configuration. An architecture test asserts no other module imports a concrete ranker implementation.
 2. **Determinism.** Identical input yields identical output ordering. Property-based test.
 3. **Substitutability.** A test injects a `StubRanker` returning reversed order and asserts the discovery endpoint reflects it with no caller change. **This is the acceptance criterion from DIS-002 that makes "substitution not rewrite" verifiable.**
 4. **Graceful degradation.** Ranker throwing or exceeding its timeout falls back to a stable default sort (distance, then rating). Discovery never fails because ranking failed.
@@ -294,10 +317,10 @@ Contracts are Zod schemas in `libs/contracts/*`, shared by server and client. On
 
 | Service | Schema | Notable |
 |---|---|---|
-| identity | `identity` | Accounts, sessions, tokens |
-| provider-catalog | `catalog` | Providers, services, reviews, aggregates |
+| identity | `identity` | Accounts, sessions, reset tokens, saved addresses (`geography(Point)`), guest drafts, auth rate-limit counters |
+| provider-catalog | `catalog` | Providers, services, reviews, aggregates, vetting docs metadata, `document_access_log` |
 | availability | `availability` | Rules, exceptions, computed slot cache |
-| booking | `booking` | Bookings, state transition log, slot holds |
+| booking | `booking` | Bookings, address snapshots, state transition log, occupancy ranges |
 | payments | `payments` | Payment records, commission ledger, Stripe refs |
 | notifications | `notifications` | Templates, dispatch log, delivery state |
 
@@ -323,11 +346,77 @@ MVP transport: **PostgreSQL-backed outbox with a polling dispatcher.** Events ar
 
 **Why outbox rather than SQS at MVP:** it gives transactional guarantees the naive alternative does not — an event cannot be published for a transaction that rolled back, and a committed transaction cannot lose its event. That is the correctness property NOT-001 needs. Swapping the dispatcher to SQS/EventBridge later is a transport change behind the same interface.
 
-Core events: `BookingStateChanged`, `PaymentCaptured`, `PaymentRefunded`, `PayoutInitiated`, `ReviewSubmitted`, `ProviderApproved`.
+Core events: `BookingStateChanged`, `PaymentCaptured`, `PaymentRefunded`, `PayoutInitiated`, `ReviewSubmitted`, `ProviderApproved`, `AvailabilityChanged`, `PayoutAccountReady`, `BookingCompleted`.
 
 ### 6.5 Error taxonomy
 
 `libs/shared/errors` defines the categories every service uses: `ValidationError`, `NotFoundError`, `ConflictError` (BOK-002 slot contention), `AuthorizationError`, `PaymentError`, `ExternalServiceError`. Each maps to an HTTP status and a client-facing shape carrying a translation key rather than an English string — NFR-UX-002 requires every failure to have an actionable, localized state.
+
+### 6.6 Time-triggered work
+
+Expiry (BOK-004), auto-complete (BOK-007), reminders (NOT-002), deferred authorization (§8.1), and payout cadence (PAY-006 / OPS-005) are not request/response. The outbox dispatcher only delivers events that have already been written.
+
+**MVP runner:** an in-process poller inside `apps/api` (same deploy as §2.3). It claims due rows with `FOR UPDATE SKIP LOCKED` and runs them through `transition()` or the payments saga. One lock row per due item; failed runs increment attempts and surface on OPS-002. Poll interval is configuration; it must stay inside NOT-001's one-minute bound.
+
+Due work is data, not cron expressions in code:
+
+| Table | Claimed when |
+|---|---|
+| `booking.bookings` | `PENDING` and `response_deadline <= now`; `CONFIRMED` and `auto_complete_at <= now` |
+| `booking.reminders` | `CONFIRMED` and `remind_at <= now` and not yet sent |
+| `payments.authorizations` | `SETUP_ONLY` and `authorize_after <= now`; or `AUTHORIZED` and `reauthorize_by <= now` |
+| `payments.payouts` | positive pending balance and schedule due (or admin trigger) |
+
+Extraction-time equivalent is EventBridge Scheduler behind the same “claim due work” interface. No separate worker service at MVP.
+
+### 6.7 Identity, sessions, and guest drafts
+
+NFR-SEC-007 requires secure, httpOnly, sameSite cookies. CUS-003 requires server-side logout. CUS-004 requires invalidating every session on password reset. A stateless JWT with no denylist cannot satisfy those.
+
+| Concern | Mechanism |
+|---|---|
+| Session | Row in `identity.sessions`; cookie is an opaque id. Flags: `Secure`, `HttpOnly`, `SameSite=Lax`. Logout deletes the row. Reset deletes all rows for the account |
+| Roles | Exactly one of `customer` \| `provider` \| `admin` per account (PRV-001). Admin uses the same identity service on `apps/admin` (`/admin` or `admin.` host) |
+| Rate limit (NFR-SEC-003) | In-module counter in `identity` on register, sign-in, and reset. Sufficient while ECS `desiredCount = 1`. Named as a hole if that count rises — WAF or Redis then, not now |
+| Enumeration (NFR-SEC-004) | Register / sign-in / reset return the same client shape whether the email exists or not. Divergence is a test failure |
+| Mid-flow auth (CUS-001) | Guest slot + address live in a signed, short-TTL cookie (or `identity.guest_drafts`). After CUS-002/003 the composer restores the draft onto the booking request. Not left in `localStorage` alone — that fails the “selections intact” criterion on a different device/tab only if we also keep the cookie |
+
+Password policy is configuration, validated before submit on the client and again in `identity`.
+
+### 6.8 Address ownership and disclosure (NFR-SEC-005)
+
+Requirements §16 flagged this as crossing service boundaries. It is not a UI condition.
+
+- **Address book** lives in `identity` (label, point, access notes). The customer reuses it (CUS-005).
+- **Booking snapshot** lives in `booking` at create time: full street address, access notes, and `geography(Point)`. Later edits to the address book do not mutate confirmed bookings.
+- **Provider-facing contract** (`contracts/booking` provider DTO):
+  - `PENDING` → `{ approxArea }` only (city / neighbourhood, not street or notes). AVL-004 / BOK-003.
+  - `CONFIRMED` and later non-declined states → `{ fullAddress, accessNotes, point }`.
+- **Customer-facing and admin contracts** see the full snapshot in every state.
+- **List, search, discovery, availability, ranking, and notification payloads** never receive street-level fields. Decline / expiry / cancel emails use service type + time + approx area. Templates are reviewed against this list.
+- **Architecture test:** a provider `PENDING` payload that contains a street, postcode, or access-note key fails CI.
+
+`availability` computes travel against the snapshot **point** (or a coarse cell) after confirm; it never stores the street string.
+
+### 6.9 Geo and distance
+
+Radius filter (DIS-001, D-5), out-of-area (CUS-005), ranking distance, and AVL-003 buffers all need a point, not a string.
+
+- Provider base location and customer addresses persist as `geography(Point)` (PostGIS on the single RDS instance).
+- Radius is a SQL `ST_DWithin` against the 15 km cap `[D-5]`, not a post-filter in the app.
+- Geocoding is a configured provider (Google or Mapbox — one key in Secrets Manager). Compose includes a stub that returns fixed points for seed addresses so local dev has no paid dependency.
+- AVL-003 stays **approximate at MVP** (requirements Assumption 5): a coarse distance-banded buffer on top of the configured flat buffer, not live routing. Absence of buffering is a bug; live maps are not required.
+
+### 6.10 Vetting-document storage (NFR-SEC-002)
+
+Portfolio images and identity documents are not the same bucket.
+
+| Asset | Store | Access |
+|---|---|---|
+| Portfolio (after approval) | Public S3 prefix + CloudFront | World-readable; uploaded only from `APPROVED` or during vetting as unpublished |
+| Government ID, credentials | Private S3 prefix, SSE-KMS, no public ACL, no CloudFront | Admin-only short-lived pre-signed GET. Every GET writes `catalog.document_access_log` (actor, document, time) — OPS-001 |
+
+Document bytes never enter `apps/web`, email templates, or logs. Metadata (filename, content type, checksum) lives in `catalog`.
 
 ---
 
@@ -368,13 +457,58 @@ export function transition(
 
 ### 7.3 Concurrency (BOK-002)
 
-Slot uniqueness is enforced by the **database, not application logic**:
+Occupancy uniqueness is enforced by the **database, not application logic**. A unique index on `(provider_id, slot_start)` is **not** sufficient: services have variable duration (PRV-004) and travel buffer applies before *and* after (AVL-003). Two creates with different starts that overlap in time would both pass that index.
 
-- A partial unique index on `(provider_id, slot_start)` for non-terminal states makes double-booking impossible at the storage layer.
-- Booking creation runs in a transaction that inserts the hold and the booking together; the loser of a race receives a unique-violation and is mapped to `ConflictError` → BOK-002's "just taken" response with alternatives.
-- Terminal transitions release the hold in the same transaction as the state change.
+Persisted occupancy for every holding booking (`PENDING` or `CONFIRMED`):
 
-Application-level checking alone cannot satisfy BOK-002's concurrent-load test. The index can.
+```
+occupancy = tstzrange(
+  slot_start - buffer_before,
+  slot_end   + buffer_after,   -- slot_end = slot_start + service.duration
+  '[)'
+)
+```
+
+Storage invariant:
+
+```sql
+EXCLUDE USING gist (
+  provider_id WITH =,
+  occupancy   WITH &&
+) WHERE (state IN ('PENDING', 'CONFIRMED'))
+```
+
+- Booking creation inserts the booking and this range in one `booking` transaction. The loser of a race receives an exclusion-violation, mapped to `ConflictError` → BOK-002's "just taken" response with alternatives from the discovery composer.
+- Terminal transitions change `state` in the same transaction, which drops the row from the partial exclusion and frees the interval immediately.
+- Slot computation still refuses overlaps when *offering* times. The constraint is what survives concurrent submit.
+
+Application-level checking alone cannot satisfy BOK-002's concurrent-load test. The exclusion constraint can. The integration test must use overlapping different starts, not only identical `slot_start`.
+
+### 7.4 Transition table
+
+Oracle for NFR-CI-004. The machine rejects every pair not listed. Effects are declarative; `booking` executes them via contracts (payments, notifications) and its own writes (hold, standing event).
+
+`BookingEvent` values: `ProviderAccepts`, `ProviderDeclines`, `ResponseDeadlinePassed`, `CustomerCancels`, `ProviderCancels`, `ProviderCompletes`, `AutoCompleteElapsed`, `ProviderReportsCustomerNoShow`, `CustomerReportsProviderNoShow`.
+
+Create (`CustomerBooks`) is not a transition. It is the saga in §8.4 and lands in `PENDING`.
+
+| From | Event | Guard | To | Effects |
+|---|---|---|---|---|
+| `PENDING` | `ProviderAccepts` | actor = provider | `CONFIRMED` | `Notify(customer, provider)`, address becomes revealable |
+| `PENDING` | `ProviderDeclines` | actor = provider | `DECLINED` | `ReleaseAuth`, `ReleaseHold`, `Notify(customer)` + alternatives |
+| `PENDING` | `ResponseDeadlinePassed` | system; `now >= min(response_window, slot_start)` | `EXPIRED` | `ReleaseAuth`, `ReleaseHold`, `Notify(customer, provider)`, `RecordStanding(response_miss)` |
+| `PENDING` | `CustomerCancels` | actor = customer | `CANCELLED_BY_CUSTOMER` | `ReleaseAuth`, `ReleaseHold`, `Notify(provider)` |
+| `CONFIRMED` | `CustomerCancels` | actor = customer; `slot_start - now > 12h` | `CANCELLED_BY_CUSTOMER` | `Refund(100%)` or `ReleaseAuth` if still uncaptured, `ReleaseHold`, `Notify(provider)` |
+| `CONFIRMED` | `CustomerCancels` | actor = customer; `slot_start - now <= 12h` | `CANCELLED_BY_CUSTOMER` | `Capture(50%)` then `Split` (or `Refund(50%)` if already captured), `ReleaseHold`, `Notify(provider)` |
+| `CONFIRMED` | `ProviderCancels` | actor = provider | `CANCELLED_BY_PROVIDER` | `Refund(100%)` or `ReleaseAuth`, `ReleaseHold`, `RecordStanding(provider_cancel)`, `Notify(customer)` + alternatives |
+| `CONFIRMED` | `ProviderCompletes` | actor = provider; `now >= slot_start` | `COMPLETED` | `Capture(100%)`, `Split`, `Notify(customer, provider)`, review prompt |
+| `CONFIRMED` | `AutoCompleteElapsed` | system; `now >= slot_end + auto_complete_window` | `COMPLETED` | same as `ProviderCompletes` |
+| `CONFIRMED` | `ProviderReportsCustomerNoShow` | actor = provider; `now >= slot_start` | `NO_SHOW_CUSTOMER` | `Capture(100%)`, `Split`, `Notify(customer)` + dispute path |
+| `CONFIRMED` | `CustomerReportsProviderNoShow` | actor = customer; `now >= slot_start` | `NO_SHOW_PROVIDER` | `Refund(100%)` or `ReleaseAuth`, `RecordStanding(provider_no_show)`, `Notify(provider)` |
+
+OPS-003 admin refunds and no-show reversals **do not appear in this table**. They write compensating payment rows and an audit record; they never move a terminal state backwards (§7.2.1).
+
+`ReleaseHold` is the state change that drops the exclusion row. `Split` is the §8.3 ledger write (gross / commission / net) plus Stripe `application_fee_amount`.
 
 ---
 
@@ -385,17 +519,44 @@ Application-level checking alone cannot satisfy BOK-002's concurrent-load test. 
 **NFR-SEC-001 is non-negotiable: zero PCI surface.**
 
 - **Stripe Elements** collects card data in a Stripe-hosted iframe. Card details never touch Shearly servers, logs, or storage.
-- **Payment Intents** with `capture_method: manual` — authorize at BOK-001, capture at BOK-007 (PAY-001, PAY-002).
+- **Payment Intents** with `capture_method: manual` when an authorization is taken — capture at completion or per the late-cancel / no-show rows in §7.4 (PAY-001, PAY-002). **Uncaptured PaymentIntents expire after 7 days** (Stripe default). The adopted 30-day discovery window (Q-4) is longer than that hold. Authorize-at-create is therefore **not** a single PaymentIntent for every booking; see the window rule below.
 - **Stripe Connect (Express)** for provider payouts. Providers onboard through Stripe-hosted flows (PAY-005); Shearly never handles bank credentials.
 - **Commission via `application_fee_amount`** — the 20% split `[D-1]` is executed by Stripe at capture, not by Shearly moving money.
 
 **Webhooks** are the source of truth for payment state. Signature-verified, idempotent by `event.id`, processed asynchronously. Shearly never infers payment success from a client-side callback.
 
+**Authorization window (PAY-001, Q-4).** Card data is collected once, via Stripe Elements, at booking confirm. What happens next depends on how far away the slot is. Let `auth_horizon` be configuration defaulting to 6 days (one day inside Stripe's 7-day uncaptured-PI cancellation).
+
+| Slot start | At BOK-001 | Later |
+|---|---|---|
+| `slot_start - now <= auth_horizon` | Create and confirm a manual-capture PaymentIntent. If that authorization fails, **no booking is created** (PAY-001). | Capture / release / refund per §7.4 |
+| `slot_start - now > auth_horizon` | Confirm a SetupIntent (card on file). If setup fails, **no booking is created**. Persist `payments.authorizations` as `SETUP_ONLY` with `authorize_after = slot_start - auth_horizon`. | §6.6 worker creates the manual-capture PaymentIntent off-session. Success → `AUTHORIZED`. Failure → customer + ops notified; booking is **not** silently left unfunded. Completion / late-cancel / no-show cannot capture what was never authorized — those paths wait on a successful PI or OPS-003 |
+
+This keeps the 30-day book window, keeps PCI at zero, and meets PAY-001's “never silently expired.” It is a deliberate reading of “authorized when I confirm” for far-future slots: the card is bound at confirm; the hold is placed when Stripe can still honor it. Shrinking Q-4 to `auth_horizon` is the fallback if off-session authorize proves unreliable in the launch market.
+
+### 8.4 Booking ↔ payments saga
+
+One process does not give these two schemas a shared transaction. Grant isolation is the point of §6.2. Consistency is a saga. `bookingAttemptId` (client `Idempotency-Key` on `POST /bookings`) is the saga id.
+
+**Create (inside `auth_horizon`):**
+
+1. Persist `payments.operations` as `authorize:{bookingAttemptId}` (`pending`) — unique key, so retries short-circuit.
+2. Create + confirm the PaymentIntent with Stripe idempotency key `authorize:{bookingAttemptId}`.
+3. If Stripe fails: mark the operation `failed`, return `PaymentError`. No booking row.
+4. If Stripe succeeds: in the **booking** transaction, insert booking + occupancy range. On exclusion-violation: cancel the PaymentIntent (`cancel:{bookingAttemptId}`), return `ConflictError`.
+5. If the process dies after step 2 and before step 4: the PI exists with no booking. The webhook / reconciler cancels orphan authorizations older than a short grace that have no matching booking. The customer can retry with the same key.
+
+**Create (beyond `auth_horizon`):** steps 1–3 use a SetupIntent (`setup:{bookingAttemptId}`) instead of a PI. Step 4 inserts the booking with `SETUP_ONLY`. No orphan hold to cancel; an orphan setup is harmless.
+
+**Later effects** (`Capture`, `Refund`, `ReleaseAuth`, `Split`) are executed by `booking` after `transition()` returns them, each with its own operations-ledger key. Failure of a payment effect does **not** roll back the booking state already committed — PAY-002: the booking stays `COMPLETED` (or the terminal it reached), the failure lands on OPS-002, retry is idempotent.
+
+There is no superuser DB role that writes both schemas “to avoid the saga.” If that temptation appears during implementation, the boundary was abandoned.
+
 ### 8.2 Idempotency
 
 Flagged by requirements §16. Three layers:
 
-1. **Stripe idempotency keys** on every mutating API call, derived deterministically from the operation: `capture:{bookingId}`, `refund:{bookingId}:{reason}`. A retry with the same key returns the original result rather than acting twice.
+1. **Stripe idempotency keys** on every mutating API call, derived deterministically from the operation: `authorize:{bookingAttemptId}`, `setup:{bookingAttemptId}`, `cancel:{bookingAttemptId}`, `capture:{bookingId}`, `refund:{bookingId}:{reason}`. A retry with the same key returns the original result rather than acting twice. `POST /bookings` requires a client `Idempotency-Key` (the attempt id).
 2. **Local operation ledger.** `payments.operations` records every attempted operation with its key, state, and result, under a unique constraint on the key. A duplicate attempt short-circuits.
 3. **Effects are idempotent by construction.** The commission ledger is append-only; balance is derived by summation, never by incrementing a mutable field. A replayed event cannot double-credit.
 
@@ -413,12 +574,12 @@ Append-only, double-entry-shaped. Each completed booking writes gross, commissio
 
 ```bash
 pnpm install
-docker compose up -d      # Postgres, Mailhog, Stripe CLI listener
+docker compose up -d      # Postgres+PostGIS, Mailhog, Stripe CLI, geocoder stub
 pnpm nx run api:migrate
 pnpm nx run-many -t serve -p web,api,admin
 ```
 
-One command per surface, no service orchestration to reason about — the concrete payoff of §2.3's topology decision. Docker Compose covers only true external dependencies: Postgres, Mailhog (email capture), and the Stripe CLI forwarding webhooks to localhost.
+One command per surface, no service orchestration to reason about — the concrete payoff of §2.3's topology decision. Docker Compose covers only true external dependencies: Postgres (PostGIS image), Mailhog (email capture), the Stripe CLI forwarding webhooks to localhost, and a geocoder stub. The §6.6 poller runs inside `api`.
 
 Seed data provisions approved providers with availability, so discovery and booking are exercisable immediately without manual setup.
 
@@ -466,12 +627,12 @@ GitHub Actions, using `nx affected` so only impacted projects run.
 
 | Area | Must cover |
 |---|---|
-| Booking concurrency | Parallel identical-slot requests → exactly one succeeds (BOK-002) |
+| Booking concurrency | Parallel overlapping occupancy (same start *and* different starts that overlap duration/buffer) → exactly one succeeds (BOK-002) |
 | Payment lifecycle | Authorize → capture → split; authorize → release; capture → refund |
 | Idempotency | Every operation in §8.2 replayed; asserts single effect |
 | Webhooks | Replayed and out-of-order Stripe events |
 | Outbox | Event published iff transaction committed |
-| Authorization | Cross-tenant access denied (NFR-SEC-008); address hidden while `PENDING` (NFR-SEC-005) |
+| Authorization | Cross-tenant access denied (NFR-SEC-008); provider `PENDING` DTO has no street/notes (NFR-SEC-005 architecture test) |
 | State transitions | Every terminal state reached through the API with correct financial effect (NFR-CI-004) |
 
 **E2E (Playwright)** — the demo paths, both locales (NFR-CI-003):
@@ -494,9 +655,13 @@ GitHub Actions, using `nx affected` so only impacted projects run.
 | Amplify / App Runner | Rejected. Fastest to stand up, but opinionated in ways that would fight a multi-service backend later. Choosing it would trade a week now for a migration later |
 | Lambda | Rejected. Cold starts jeopardize NFR-PERF-001/003, and the always-warm workload does not suit per-invocation pricing |
 
-**Topology:** ALB → ECS Fargate service (Next.js + API container) → RDS Postgres (Multi-AZ off at MVP), S3 + CloudFront for portfolio images, Secrets Manager for credentials, CloudWatch for logs and metrics.
+**Topology:** ALB → one ECS Fargate task running two processes (Next.js standalone + `apps/api` on localhost) → RDS Postgres + PostGIS (Multi-AZ off at MVP). ALB rules: `/` → web, `/api` → API, `/admin` → admin (or `admin.` host; same task). SSR talks to the API over loopback.
 
-**Deployment:** rolling update with health checks. Migrations run as a pre-deploy ECS task, forward-only and backward-compatible so a rollback never strands the schema.
+**Also on the diagram:** public S3 + CloudFront (portfolio), private S3 + KMS (vetting docs), SES (prod email; Mailhog locally), Secrets Manager (Stripe, geocoder, session signing key), CloudWatch logs + alarms, Sentry per DQ-3.
+
+**Named alarms (NFR-OBS-004):** payment capture failure, refund failure, booking expiry spike, orphan-authorization reconciler action, SES bounce rate.
+
+**Deployment:** rolling update with health checks. Migrations run as a pre-deploy ECS task, forward-only and backward-compatible so a rollback never strands the schema. `desiredCount = 1` at MVP; that is the condition under which the in-module auth rate limiter is sufficient (§6.7).
 
 ---
 
@@ -534,20 +699,26 @@ Vision §6 concluded **no agentic AI ships in MVP**; the sole architectural comm
 
 | # | Decision | Alternative rejected |
 |---|---|---|
-| 1 | Six bounded contexts, one deployment | Five independent services — 5× ops burden for a solo founder at zero MVP benefit |
-| 2 | Nx module boundaries CI-enforced | Convention-based separation — erodes silently |
+| 1 | Six bounded contexts, one deployment | Six independent services — 6× ops burden for a solo founder at zero MVP benefit |
+| 2 | Nx module boundaries CI-enforced; `type:app-api` vs `type:app-web` | A single `type:app` tag — either hides the composition root or lets the UI import services |
 | 3 | Contracts separate from implementations | Direct service imports — creates cycles, blocks extraction |
 | 4 | One Postgres, schema-per-service + grants | Six instances (cost); shared schema (destroys the boundary) |
 | 5 | REST + Zod contracts | GraphQL — complexity without a many-clients problem |
 | 6 | Next.js App Router | SPA + separate API — loses SSR where NFR-PERF-001 is hardest |
 | 7 | shadcn/ui + Tailwind logical properties | Component library dependency — RTL control is the usual failure point |
 | 8 | Explicit state machine returning effects | Status field mutations — untestable, unenforceable |
-| 9 | DB-level slot uniqueness | Application-level checks — cannot satisfy BOK-002 under concurrency |
+| 9 | GiST exclusion on occupancy range (service + buffer) | Unique index on `slot_start` — misses overlapping durations |
 | 10 | Stripe Elements + Connect + application fees | Custom payment handling — unacceptable PCI surface |
-| 11 | Three-layer idempotency | Trusting retry safety — silently double-charges |
+| 11 | Three-layer idempotency including authorize/setup keys | Trusting retry safety — silently double-charges |
 | 12 | Transactional outbox | Direct publish — loses events on rollback |
 | 13 | ECS Fargate | EKS (burden), Amplify (later migration), Lambda (cold starts) |
 | 14 | Consequence-weighted coverage thresholds | Uniform threshold — spends effort where defects are cheap |
+| 15 | SetupIntent now + deferred PI outside `auth_horizon` | Always-manual-capture at book (silently dies at 7 days) or shrink Q-4 |
+| 16 | Booking↔payments saga; no cross-schema transaction | Superuser unit-of-work — abandons grant isolation |
+| 17 | `apps/api` is the read composer | Catalog calling availability / payments synchronously as if it owned them |
+| 18 | Server-side sessions + httpOnly cookies | Stateless JWT — cannot satisfy CUS-003/004 or NFR-SEC-007 |
+| 19 | Addresses in identity; snapshot + DTO gate in booking | UI-only hide of the street while `PENDING` |
+| 20 | In-process due-work poller in `api` | No scheduler — expiry, auto-complete, reminders, and deferred auth never fire |
 
 ---
 
@@ -555,12 +726,13 @@ Vision §6 concluded **no agentic AI ships in MVP**; the sole architectural comm
 
 ### Assumptions
 
-1. **"Microservices-oriented" describes code structure; deployment count is the reversible variable** (§2.3). The design's most consequential interpretation of a fixed constraint. §11 is the escape hatch, and it is testable.
+1. **"Microservices-oriented" describes code structure; deployment count is the reversible variable** (§2.3). The design's most consequential interpretation of a fixed constraint. §11 is the escape hatch, and it is testable. It does **not** mean booking and payments share a transaction.
 2. **One Postgres instance with schema isolation is a real boundary.** Grant-level isolation gives the guarantee that matters; separate instances would add cost and operational surface without adding safety at MVP.
-3. **Reviews belong to `provider-catalog`.** No independent lifecycle; separating them would add a synchronous dependency to every profile view.
+3. **Reviews belong to `provider-catalog`.** No independent lifecycle; separating them would add a synchronous dependency to every profile view. Submission is still gated by `booking` (§2.4).
 4. **The outbox dispatcher is adequate at MVP volume.** Polling latency is well inside NOT-001's one-minute target. Revisit if event volume grows materially.
 5. **Stripe Connect Express is the payout mechanism.** Assumes providers accept Stripe onboarding. If a local payout rail becomes necessary, §8's boundary contains the change.
-6. **Q-1…Q-5 defaults from requirements §16 are adopted** — response window 2h, weekly payouts, 2h lead, 30-day window, standing thresholds. All are configuration (§9.2), changeable without code.
+6. **Q-1…Q-5 defaults from requirements §16 are adopted** — response window 2h, weekly payouts, 2h lead, 30-day window, standing thresholds. All are configuration (§9.2). The 30-day window is implemented with §8.1's `auth_horizon`, not with a 30-day uncaptured PaymentIntent.
+7. **`desiredCount = 1` at MVP.** The in-module auth rate limiter and the in-process poller both assume that. Scaling out is an extraction-time change, not a silent replica of those two.
 
 ### Open questions for founder decision
 
@@ -570,18 +742,63 @@ Vision §6 concluded **no agentic AI ships in MVP**; the sole architectural comm
 | **DQ-2** | Staging environment, or preview deploys only? | Pipeline cost and complexity | Preview per PR + production only; no persistent staging |
 | **DQ-3** | Error tracking — Sentry or CloudWatch alone? | NFR-OBS-002 fidelity | Sentry; CloudWatch alone makes solo debugging materially harder |
 | **DQ-4** | Portfolio image moderation before public display? | PRV-004 flow, admin load | Admin reviews images during vetting (OPS-001); no separate queue |
+| **DQ-5** | Far-future bookings: SetupIntent + deferred authorize, or cap Q-4 at `auth_horizon`? | PAY-001 shape, demo book-ahead | SetupIntent + deferred PI (§8.1). Cap Q-4 only if off-session authorize fails in the launch market |
 
-None blocks Phase 4. Each is a configuration or tooling choice, not a structural one.
+DQ-1…DQ-4 remain configuration/tooling. **DQ-5 is the only new founder call**; the default is already written into §8.1 so planning is not blocked.
 
-### Flagged for Phase 4 (Implementation Plan)
+Parked implementation defaults (not founder questions — the plan may use these without further design):
 
-- **Build order should follow the dependency graph** (§2.2): `identity` → `provider-catalog` → `availability` → `booking` → `payments` → `notifications`. Payments cannot be meaningfully built before booking exists.
-- **The skeleton must come first** — Nx workspace, module boundary rules, and the CI pipeline before feature work. Boundary rules added late are boundary rules already violated.
+| # | Topic | Default |
+|---|---|---|
+| **OQ-1** | Who composes discovery / reviews / go-live? | `apps/api` (§2.4) |
+| **OQ-2** | Job runner | In-process poller + `FOR UPDATE SKIP LOCKED` (§6.6) |
+| **OQ-3** | Session mechanism | Server-side sessions, httpOnly Secure SameSite=Lax (§6.7) |
+| **OQ-4** | Guest booking draft | Signed short-TTL cookie / `identity.guest_drafts` (§6.7) |
+| **OQ-5** | Geocoding | Configured provider + PostGIS points + Compose stub (§6.9) |
+| **OQ-6** | ID-document store | Private S3 + KMS + `document_access_log` (§6.10) |
+| **OQ-7** | Auth rate limit | In-module limiter while `desiredCount = 1` (§6.7) |
+| **OQ-8** | Admin deploy + auth | Same task, `/admin` or `admin.` host, `role=admin` |
+| **OQ-9** | Email + alarms | SES + the named CloudWatch alarms in §10.3 |
+| **OQ-10** | App Router i18n library | Keep i18next resource format; use a known-good App Router adapter (`next-intl` or equivalent). Do not block on `next-i18next` if it fights the App Router |
+| **OQ-11** | State-machine fixture | §7.4 is the oracle; lock it as a test fixture in the first booking milestone |
+
+### Flagged for the Implementation Plan (stage 4)
+
+- **Build order should follow the write-ownership graph** (§2.2): `identity` → `provider-catalog` → `availability` → `booking` → `payments` → `notifications`. The discovery composer in `apps/api` is wired once those contracts exist; it is not a seventh service.
+- **The skeleton must come first** — Nx workspace, the **split** app tags in §3.3 (`type:app-api` vs `type:app-web`), and the CI pipeline before feature work. Boundary rules added late are boundary rules already violated.
 - **The seam's substitutability test (§4.3.3) should exist from the first ranking commit**, not be retrofitted. It is the only thing that keeps §4 honest.
 - **Both-locale E2E should be established with the first E2E test**, not added at the end. Retrofitting RTL coverage is how RTL becomes second-class in practice.
+- **The occupancy exclusion and the §8.4 saga belong in the first booking/payments milestones**, not as polish. They are the money path.
+- **The §7.4 table is the NFR-CI-004 fixture.** Implement tests from it; do not re-derive transitions from the stories in the service layer.
 
 ---
 
-## 15. Next Step
+## 15. Design-review addendum
 
-On approval, proceed to **MVP Implementation Plan** (`docs/mvp/04-implementation-plan.md`): the concrete story slice for MVP, build sequencing and milestones, branch/PR workflow tied to the §10.1 gates, post-MVP roadmap, and a Definition of Done matching the submission bar.
+This section records what the post-review revision changed and what it deliberately did **not** reopen.
+
+**Stack choices that still hold:** Nx monorepo; six bounded contexts in one Fargate deployment; REST + Zod contracts; Next.js App Router; shadcn/ui + Tailwind logical properties; PostgreSQL schema-per-service + grants; Stripe Elements + Connect Express + `application_fee_amount`; transactional outbox; ranking seam; merge-blocking CI; no LLM in MVP.
+
+**Corrected (were wrong or unsafe as written):**
+
+| Was | Now |
+|---|---|
+| Unique index on `(provider_id, slot_start)` | GiST exclusion on occupancy range including buffer (§7.3) |
+| One process ⇒ no booking/payments distributed transaction | Saga with orphan-PI reconciler; grants stay (§8.4) |
+| Manual-capture PI at book for a 30-day window | SetupIntent + deferred PI outside `auth_horizon` (§8.1) |
+| NFR-SEC-005 as an integration-test bullet | Ownership, snapshot, provider DTO gate, architecture test (§6.8) |
+| `type:app` may not depend on `type:service` | `type:app-api` may; `type:app-web` may not (§3.3) |
+| `booking` is the only orchestrator | `booking` orchestrates writes; `apps/api` composes reads (§2.4) |
+| “Five” independently deployed services | Six |
+
+**Added so P0 mechanisms are not invented in the plan:** identity/sessions/guest draft (§6.7), due-work poller (§6.6), geo/PostGIS (§6.9), private vetting-doc store (§6.10), transition table (§7.4), process graph and SES/alarms (§10.3).
+
+**Still a founder question:** DQ-5 (keep 30-day window with deferred authorize, or cap book-ahead). Default is written.
+
+Requirements §16 Phase-3 flags after this revision: ranking seam specified; payment idempotency specified (including authorize/setup keys); state machine specified (shape + table); NFR-SEC-005 specified.
+
+---
+
+## 16. Next Step
+
+On approval, proceed to **MVP Implementation Plan** (`docs/mvp/04-implementation-plan.md`): the concrete story slice for MVP, build sequencing and milestones, branch/PR workflow tied to the §10.1 gates, post-MVP roadmap, and a Definition of Done matching the submission bar. The plan should take this document — including §15 — as decided architecture, not re-open it.
