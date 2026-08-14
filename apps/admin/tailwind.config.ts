@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
-import { designSystemPreset } from '@shearly/ui-design-system/tailwind';
+// Relative on purpose: Tailwind loads this file with Node, not tsconfig paths.
+import { designSystemPreset } from '../../libs/ui/design-system/tailwind.config';
 
 const config: Config = {
   presets: [designSystemPreset],
