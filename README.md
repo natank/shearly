@@ -12,6 +12,7 @@ This machine may use **Podman** (`docker` is then the Podman CLI). Start the VM 
 
 ```bash
 pnpm install
+cp -n .env.example .env
 docker compose up -d
 pnpm nx run-many -t serve -p web,api,admin
 ```
