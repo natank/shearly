@@ -59,6 +59,19 @@ export default [
           ],
         },
       ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']",
+          message: 'Read environment through @shearly/shared-config. Do not use process.env.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['libs/shared/config/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
 ];

@@ -1,1 +1,2 @@
-export const SHARED_CONFIG_NAME = 'config';
+export { loadConfig } from './load-config.js';
+export type { AppConfig } from './schema.js';

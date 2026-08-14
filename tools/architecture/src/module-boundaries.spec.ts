@@ -30,6 +30,14 @@ describe('module boundaries', () => {
     expect(boundaryHits.length).toBeGreaterThan(0);
   });
 
+  it('rejects process.env outside shared-config', async () => {
+    const eslint = new ESLint({ cwd: repoRoot });
+    const fixture = join(repoRoot, 'tools/architecture-fixtures/src/illegal-process-env.ts');
+    const results = await eslint.lintFiles([fixture]);
+    const messages = results.flatMap((r) => r.messages);
+    expect(messages.some((m) => m.ruleId === 'no-restricted-syntax')).toBe(true);
+  });
+
   it('rejects physical CSS in a fixture', () => {
     const result = spawnSync(
       process.execPath,

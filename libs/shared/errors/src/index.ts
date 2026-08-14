@@ -1,1 +1,10 @@
-export const SHARED_ERRORS_NAME = 'errors';
+export {
+  AppError,
+  AuthorizationError,
+  ConflictError,
+  ExternalServiceError,
+  NotFoundError,
+  PaymentError,
+  ValidationError,
+  toErrorBody,
+} from './app-error.js';

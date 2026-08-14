@@ -1,8 +1,9 @@
 import { serve } from '@hono/node-server';
+import { loadConfig } from '@shearly/shared-config';
 import { createApp } from './app.js';
 
-const port = Number(process.env.API_PORT ?? 4000);
+const config = loadConfig();
 
-serve({ fetch: createApp().fetch, port }, (info) => {
+serve({ fetch: createApp().fetch, port: config.apiPort }, (info) => {
   process.stdout.write(`api listening on ${info.port}\n`);
 });
