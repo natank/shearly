@@ -123,6 +123,12 @@ importers:
 
   apps/admin:
     dependencies:
+      '@shearly/contracts-identity':
+        specifier: workspace:*
+        version: link:../../libs/contracts/identity
+      '@shearly/feature-account':
+        specifier: workspace:*
+        version: link:../../libs/ui/feature-account
       '@shearly/ui-design-system':
         specifier: workspace:*
         version: link:../../libs/ui/design-system
@@ -134,6 +140,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@shearly/contracts-identity':
+        specifier: workspace:*
+        version: link:../../libs/contracts/identity
+      '@shearly/feature-account':
+        specifier: workspace:*
+        version: link:../../libs/ui/feature-account
       '@shearly/ui-design-system':
         specifier: workspace:*
         version: link:../../libs/ui/design-system
@@ -187,7 +199,14 @@ importers:
 
   libs/ui/design-system: {}
 
-  libs/ui/feature-account: {}
+  libs/ui/feature-account:
+    dependencies:
+      '@shearly/contracts-identity':
+        specifier: workspace:*
+        version: link:../../contracts/identity
+      '@shearly/ui-design-system':
+        specifier: workspace:*
+        version: link:../design-system
 
   libs/ui/feature-booking: {}
 
