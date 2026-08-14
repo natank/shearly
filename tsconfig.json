@@ -88,6 +88,9 @@
     },
     {
       "path": "./libs/ui/i18n"
+    },
+    {
+      "path": "./apps/api"
     }
   ]
 }

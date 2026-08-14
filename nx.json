@@ -28,7 +28,8 @@
         "typecheck": {
           "targetName": "typecheck"
         }
-      }
+      },
+      "exclude": ["apps/web/**", "apps/admin/**"]
     },
     {
       "plugin": "@nx/eslint/plugin",

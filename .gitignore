@@ -1,6 +1,7 @@
 node_modules
 dist
 coverage
+.next
 .nx
 .vscode/*
 !.vscode/extensions.json
