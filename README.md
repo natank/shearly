@@ -36,7 +36,18 @@ pnpm nx run-many -t lint,test,typecheck
 pnpm e2e
 ```
 
-CI (design §10.1 gates 1–8) runs on every PR and on `main`. Merge should be blocked on that workflow.
+CI (design §10.1 gates 1–8) runs on every PR and on `main`. The **Image** workflow builds the Fargate-shaped container and smokes `GET /health`. Merge should be blocked on both.
+
+### Container (M0-P7)
+
+One image, two processes: Next (`:3000`) and API (`:4000`).
+
+```bash
+docker build -t shearly:local .
+docker run --rm -p 3000:3000 -p 4000:4000 --env-file .env shearly:local
+```
+
+ECR push is skipped unless these GitHub Actions secrets exist: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ECR_REPOSITORY`. Preview/production URLs wait until AWS is provisioned (PQ-3).
 
 ## Docs
 
