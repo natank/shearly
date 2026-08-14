@@ -1,0 +1,7 @@
+{
+  "name": "architecture-fixtures",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/architecture-fixtures/src",
+  "projectType": "library",
+  "tags": ["type:app-web"]
+}

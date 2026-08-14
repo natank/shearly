@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/contracts-identity",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/contracts/identity/src",
+  "projectType": "library",
+  "tags": ["type:contract"]
+}

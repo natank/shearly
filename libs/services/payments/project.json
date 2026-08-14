@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/services-payments",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/services/payments/src",
+  "projectType": "library",
+  "tags": ["type:service"]
+}

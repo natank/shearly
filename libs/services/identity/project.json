@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/services-identity",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/services/identity/src",
+  "projectType": "library",
+  "tags": ["type:service"]
+}

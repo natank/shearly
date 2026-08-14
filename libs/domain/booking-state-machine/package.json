@@ -1,0 +1,8 @@
+{
+  "name": "@shearly/domain-booking-state-machine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/domain-slot-computation",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/domain/slot-computation/src",
+  "projectType": "library",
+  "tags": ["type:domain"]
+}

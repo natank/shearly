@@ -1,0 +1,7 @@
+{
+  "name": "@shearly/services-booking",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/services/booking/src",
+  "projectType": "library",
+  "tags": ["type:service"]
+}
