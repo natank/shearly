@@ -163,4 +163,37 @@ describe('auth HTTP', () => {
     });
     expect(await tampered.json()).toEqual({ draft: null });
   });
+
+  it('does not let session A read session B (NFR-SEC-008)', async () => {
+    if (!app) {
+      return;
+    }
+    const a = await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.80' },
+      body: JSON.stringify({
+        email: `sec-a-${crypto.randomUUID()}@example.com`,
+        password: 'long-enough-password',
+        role: 'customer',
+        locale: 'en',
+      }),
+    });
+    const b = await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.81' },
+      body: JSON.stringify({
+        email: `sec-b-${crypto.randomUUID()}@example.com`,
+        password: 'long-enough-password',
+        role: 'provider',
+        locale: 'en',
+      }),
+    });
+    const meA = (await (await app.request('/me', { headers: { cookie: cookie(a) } })).json()) as {
+      account: { email: string };
+    };
+    const meB = (await (await app.request('/me', { headers: { cookie: cookie(b) } })).json()) as {
+      account: { email: string };
+    };
+    expect(meA.account.email).not.toBe(meB.account.email);
+  });
 });

@@ -14,11 +14,20 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'pnpm exec next build && pnpm exec next start --port 3000',
-    cwd: '../web',
-    url: `${baseURL}/en`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      command: 'pnpm exec tsx src/main.ts',
+      cwd: '../api',
+      url: 'http://127.0.0.1:4000/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: 'pnpm exec next build && pnpm exec next start --port 3000',
+      cwd: '../web',
+      url: `${baseURL}/en`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+    },
+  ],
 });
