@@ -18,5 +18,7 @@ describe('loadConfig', () => {
     expect(config.radiusCapKm).toBe(15);
     expect(config.commissionRate).toBe(0.2);
     expect(config.apiPort).toBe(4000);
+    expect(config.passwordMinLength).toBe(10);
+    expect(config.sessionCookieName).toBe('shearly_session');
   });
 });

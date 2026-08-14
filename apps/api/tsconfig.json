@@ -10,6 +10,9 @@
   "include": ["src/**/*.ts"],
   "references": [
     {
+      "path": "../../libs/services/identity"
+    },
+    {
       "path": "../../libs/shared/config"
     },
     {
