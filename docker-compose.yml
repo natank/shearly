@@ -3,7 +3,8 @@
 
 services:
   postgres:
-    image: docker.io/postgis/postgis:16-3.5
+    # Official postgis/postgis:16-3.5 is amd64-only. This GHCR image is multi-arch (Apple Silicon).
+    image: ghcr.io/baosystems/postgis:16-3.5
     environment:
       POSTGRES_USER: shearly
       POSTGRES_PASSWORD: shearly
@@ -19,7 +20,8 @@ services:
       retries: 10
 
   mailhog:
-    image: docker.io/mailhog/mailhog:v1.0.1
+    # mailhog is amd64-only; mailpit is multi-arch and uses the same local ports.
+    image: docker.io/axllent/mailpit:latest
     ports:
       - '1025:1025'
       - '8025:8025'

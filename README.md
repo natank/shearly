@@ -23,7 +23,7 @@ pnpm nx run-many -t serve -p web,api,admin
 | admin              | http://localhost:4300                              |
 | api                | http://localhost:4000/health                       |
 | Postgres (PostGIS) | localhost:5432 (`shearly` / `shearly` / `shearly`) |
-| Mailhog SMTP / UI  | 1025 / 8025                                        |
+| Mailpit SMTP / UI  | 1025 / 8025                                        |
 | Geocoder stub      | http://localhost:3001/geocode?q=tel-aviv           |
 
 Stripe CLI is opt-in: `docker compose --profile stripe up -d` with `STRIPE_API_KEY`. Image pulls happen inside the Podman VM; Hub TLS errors are a VM/CA issue, not this file.
