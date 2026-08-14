@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +28,16 @@ describe('module boundaries', () => {
     const messages = results.flatMap((r) => r.messages);
     const boundaryHits = messages.filter((m) => m.ruleId === '@nx/enforce-module-boundaries');
     expect(boundaryHits.length).toBeGreaterThan(0);
+  });
+
+  it('rejects physical CSS in a fixture', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/check-physical-styles.mjs', 'tools/architecture-fixtures/src'],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('margin-left');
   });
 
   it('keeps type:domain free of shared, service, and ui imports', () => {

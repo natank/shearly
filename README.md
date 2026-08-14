@@ -18,7 +18,7 @@ pnpm nx run-many -t serve -p web,api,admin
 
 | Surface | URL |
 |---|---|
-| web | http://localhost:3000 |
+| web | http://localhost:3000/en and /he |
 | admin | http://localhost:4300 |
 | api | http://localhost:4000/health |
 | Postgres (PostGIS) | localhost:5432 (`shearly` / `shearly` / `shearly`) |

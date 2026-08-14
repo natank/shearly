@@ -1,1 +1,2 @@
-export const DESIGN_SYSTEM_NAME = 'design-system';
+export { Button, type ButtonProps } from './components/button.js';
+export { cn } from './lib/utils.js';

@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/ui/i18n/src",
   "projectType": "library",
-  "tags": ["type:ui"]
+  "tags": ["type:ui"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/ui/i18n/vitest.config.ts"
+      }
+    }
+  }
 }

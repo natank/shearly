@@ -8,11 +8,16 @@
     "declaration": false,
     "composite": false,
     "incremental": true,
-    "plugins": [{ "name": "next" }],
-    "paths": {
-      "@/*": ["./*"]
-    }
+    "plugins": [{ "name": "next" }]
   },
   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "references": [
+    {
+      "path": "../../libs/ui/design-system"
+    },
+    {
+      "path": "../../libs/ui/i18n"
+    }
+  ]
 }
