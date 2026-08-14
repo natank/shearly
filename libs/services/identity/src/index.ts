@@ -4,3 +4,4 @@ export type { IdentityConfig } from './identity-service.js';
 export { assertPasswordPolicy, dummyVerify, hashPassword, verifyPassword } from './password.js';
 export { createSmtpMailer } from './mailer.js';
 export type { SendMail } from './mailer.js';
+export { decodeGuestDraft, encodeGuestDraft } from './guest-draft.js';

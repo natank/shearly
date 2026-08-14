@@ -18,6 +18,9 @@ export const envSchema = z.object({
   AUTH_RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
   WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
   RESET_TOKEN_TTL_HOURS: z.coerce.number().positive().default(1),
+  GUEST_DRAFT_SECRET: z.string().min(8).default('dev-guest-draft-secret'),
+  GUEST_DRAFT_TTL_HOURS: z.coerce.number().positive().default(2),
+  GUEST_DRAFT_COOKIE_NAME: z.string().min(1).default('shearly_guest_draft'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -40,6 +43,9 @@ export type AppConfig = {
   authRateLimitWindowSec: number;
   webOrigin: string;
   resetTokenTtlHours: number;
+  guestDraftSecret: string;
+  guestDraftTtlHours: number;
+  guestDraftCookieName: string;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -61,5 +67,8 @@ export function toAppConfig(env: Env): AppConfig {
     authRateLimitWindowSec: env.AUTH_RATE_LIMIT_WINDOW_SEC,
     webOrigin: env.WEB_ORIGIN,
     resetTokenTtlHours: env.RESET_TOKEN_TTL_HOURS,
+    guestDraftSecret: env.GUEST_DRAFT_SECRET,
+    guestDraftTtlHours: env.GUEST_DRAFT_TTL_HOURS,
+    guestDraftCookieName: env.GUEST_DRAFT_COOKIE_NAME,
   };
 }

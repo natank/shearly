@@ -143,4 +143,24 @@ describe('auth HTTP', () => {
     expect(knownBody).toEqual(unknownBody);
     expect(unknownBody).toEqual({ ok: true, translationKey: 'auth.resetRequested' });
   });
+
+  it('writes and reads a guest draft cookie', async () => {
+    if (!app) {
+      return;
+    }
+    const saved = await app.request('/auth/guest-draft', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ providerId: 'prov-1', slotId: 'slot-1' }),
+    });
+    expect(saved.status).toBe(200);
+    const header = cookie(saved);
+    expect(header).toContain('shearly_guest_draft=');
+    const read = await app.request('/auth/guest-draft', { headers: { cookie: header } });
+    expect(await read.json()).toEqual({ draft: { providerId: 'prov-1', slotId: 'slot-1' } });
+    const tampered = await app.request('/auth/guest-draft', {
+      headers: { cookie: `${header}tamper` },
+    });
+    expect(await tampered.json()).toEqual({ draft: null });
+  });
 });
