@@ -18,6 +18,16 @@ export const signInRequestSchema = z.object({
   password: z.string(),
 });
 
+export const passwordResetRequestSchema = z.object({
+  email: z.string().trim().email(),
+  locale: localeSchema.default('en'),
+});
+
+export const passwordResetConfirmSchema = z.object({
+  token: z.string().min(1),
+  password: z.string(),
+});
+
 export const publicAccountSchema = z.object({
   id: z.string().uuid(),
   email: z.string(),
@@ -30,4 +40,6 @@ export type RegisterRole = z.infer<typeof registerRoleSchema>;
 export type Locale = z.infer<typeof localeSchema>;
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
+export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
+export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
 export type PublicAccount = z.infer<typeof publicAccountSchema>;

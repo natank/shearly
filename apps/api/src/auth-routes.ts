@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { registerRequestSchema, signInRequestSchema } from '@shearly/contracts-identity';
+import {
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  registerRequestSchema,
+  signInRequestSchema,
+} from '@shearly/contracts-identity';
 import { AppError, ValidationError } from '@shearly/shared-errors';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
@@ -57,6 +62,27 @@ export function createAuthRoutes(identity: IdentityService, config: AppConfig) {
     await identity.signOut(getCookie(c, config.sessionCookieName));
     deleteCookie(c, config.sessionCookieName, { path: '/' });
     return c.json({ ok: true, translationKey: 'auth.signedOut' });
+  });
+
+  routes.post('/auth/password-reset/request', async (c) => {
+    const parsed = passwordResetRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      throw new ValidationError('errors.validation');
+    }
+    await identity.requestPasswordReset({
+      ...parsed.data,
+      ip: clientIp(c.req.header('x-forwarded-for')),
+    });
+    return c.json({ ok: true, translationKey: 'auth.resetRequested' });
+  });
+
+  routes.post('/auth/password-reset/confirm', async (c) => {
+    const parsed = passwordResetConfirmSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      throw new ValidationError('errors.validation');
+    }
+    await identity.confirmPasswordReset(parsed.data);
+    return c.json({ ok: true, translationKey: 'auth.resetCompleted' });
   });
 
   routes.get('/me', async (c) => {

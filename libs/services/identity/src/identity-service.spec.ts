@@ -11,6 +11,8 @@ const config = {
   sessionTtlHours: 24,
   authRateLimitMax: 10,
   authRateLimitWindowSec: 60,
+  webOrigin: 'http://localhost:3000',
+  resetTokenTtlHours: 1,
 };
 
 describe('IdentityService', () => {
@@ -114,5 +116,47 @@ describe('IdentityService', () => {
     }
     expect(limited?.code).toBe('RATE_LIMITED');
     expect(limited?.httpStatus).toBe(429);
+  });
+
+  it('resets a password, mails a link, and kills existing sessions', async () => {
+    if (!pool || !url) {
+      return;
+    }
+    const sent: { to: string; text: string }[] = [];
+    const identity = new IdentityService(pool, config, async (mail) => {
+      sent.push(mail);
+    });
+    const email = `rst-${crypto.randomUUID()}@example.com`;
+    const ip = `198.51.100.${Math.floor(Math.random() * 200) + 20}`;
+    const created = await identity.register({
+      email,
+      password: 'long-enough-password',
+      role: 'customer',
+      locale: 'en',
+      ip,
+    });
+    await identity.requestPasswordReset({ email, locale: 'he', ip: `${ip}.1` });
+    expect(sent).toHaveLength(1);
+    const token = sent[0]?.text.match(/token=([A-Za-z0-9_-]+)/)?.[1];
+    expect(token).toBeTruthy();
+
+    await identity.requestPasswordReset({
+      email: `missing-${crypto.randomUUID()}@example.com`,
+      locale: 'en',
+      ip: `${ip}.2`,
+    });
+    expect(sent).toHaveLength(1);
+
+    await identity.confirmPasswordReset({ token: token ?? '', password: 'brand-new-password' });
+    expect(await identity.accountFromSession(created.sessionToken ?? undefined)).toBeNull();
+    const signedIn = await identity.signIn({
+      email,
+      password: 'brand-new-password',
+      ip: `${ip}.3`,
+    });
+    expect(signedIn.sessionToken).toBeTruthy();
+    await expect(
+      identity.confirmPasswordReset({ token: token ?? '', password: 'another-new-password' }),
+    ).rejects.toMatchObject({ translationKey: 'auth.resetInvalid' });
   });
 });

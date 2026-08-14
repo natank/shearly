@@ -16,6 +16,8 @@ export const envSchema = z.object({
   PASSWORD_MIN_LENGTH: z.coerce.number().int().min(8).default(10),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   AUTH_RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+  WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
+  RESET_TOKEN_TTL_HOURS: z.coerce.number().positive().default(1),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -36,6 +38,8 @@ export type AppConfig = {
   passwordMinLength: number;
   authRateLimitMax: number;
   authRateLimitWindowSec: number;
+  webOrigin: string;
+  resetTokenTtlHours: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -55,5 +59,7 @@ export function toAppConfig(env: Env): AppConfig {
     passwordMinLength: env.PASSWORD_MIN_LENGTH,
     authRateLimitMax: env.AUTH_RATE_LIMIT_MAX,
     authRateLimitWindowSec: env.AUTH_RATE_LIMIT_WINDOW_SEC,
+    webOrigin: env.WEB_ORIGIN,
+    resetTokenTtlHours: env.RESET_TOKEN_TTL_HOURS,
   };
 }
