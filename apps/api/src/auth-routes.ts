@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
+  guestDraftSchema,
   passwordResetConfirmSchema,
   passwordResetRequestSchema,
   registerRequestSchema,
@@ -8,7 +9,11 @@ import {
 } from '@shearly/contracts-identity';
 import { AppError, ValidationError } from '@shearly/shared-errors';
 import type { AppConfig } from '@shearly/shared-config';
-import type { IdentityService } from '@shearly/services-identity';
+import {
+  decodeGuestDraft,
+  encodeGuestDraft,
+  type IdentityService,
+} from '@shearly/services-identity';
 
 function clientIp(header: string | undefined): string {
   return header?.split(',')[0]?.trim() || '127.0.0.1';
@@ -83,6 +88,27 @@ export function createAuthRoutes(identity: IdentityService, config: AppConfig) {
     }
     await identity.confirmPasswordReset(parsed.data);
     return c.json({ ok: true, translationKey: 'auth.resetCompleted' });
+  });
+
+  routes.post('/auth/guest-draft', async (c) => {
+    const parsed = guestDraftSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      throw new ValidationError('errors.validation');
+    }
+    const value = encodeGuestDraft(parsed.data, config.guestDraftSecret, config.guestDraftTtlHours);
+    setCookie(c, config.guestDraftCookieName, value, {
+      ...cookieOpts(config),
+      maxAge: Math.floor(config.guestDraftTtlHours * 60 * 60),
+    });
+    return c.json({ ok: true, translationKey: 'auth.guestDraftSaved' });
+  });
+
+  routes.get('/auth/guest-draft', (c) => {
+    const payload = decodeGuestDraft(
+      getCookie(c, config.guestDraftCookieName),
+      config.guestDraftSecret,
+    );
+    return c.json({ draft: payload });
   });
 
   routes.get('/me', async (c) => {

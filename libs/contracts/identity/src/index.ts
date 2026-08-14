@@ -28,6 +28,12 @@ export const passwordResetConfirmSchema = z.object({
   password: z.string(),
 });
 
+export const guestDraftSchema = z.object({
+  slotId: z.string().optional(),
+  providerId: z.string().optional(),
+  addressLabel: z.string().optional(),
+});
+
 export const publicAccountSchema = z.object({
   id: z.string().uuid(),
   email: z.string(),
@@ -42,4 +48,5 @@ export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 export type PasswordResetRequest = z.infer<typeof passwordResetRequestSchema>;
 export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
+export type GuestDraft = z.infer<typeof guestDraftSchema>;
 export type PublicAccount = z.infer<typeof publicAccountSchema>;
