@@ -2,7 +2,7 @@
 
 **Stage:** 4 of 4 (Implementation Plan)
 **Scope:** MVP only. Product Phase 2+ appears as a roadmap, not as build work.
-**Status:** Draft — milestone cuts written; per-milestone plans in this folder.
+**Status:** M0 complete on `main` (2026-08-14). M1 plan accepted; implementation next. M2–M5 plans not written.
 **Source:** `docs/mvp/mvp-kickoff.md`, `docs/01-vision.md`, `docs/mvp/02-requirements.md`, `docs/mvp/03-design.md`
 
 This file is the **master plan**. Milestone plans live beside it and are the source of PR sequences. The master owns the cuts, the story map, and the MVP Definition of Done. A milestone plan may not add, drop, or move a story without updating §4–§5 here.
@@ -13,13 +13,24 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 
 | ID | Document | Role | Status |
 |---|---|---|---|
-| **MASTER** | [04-implementation-plan.md](./04-implementation-plan.md) | Cuts, story map, DoD, delivery outline | Draft |
-| **M0** | [m0-foundation.md](./m0-foundation.md) | Foundation PR sequence | Draft |
-| **M1** | `m1-accounts.md` | Accounts | Not written |
+| **MASTER** | [04-implementation-plan.md](./04-implementation-plan.md) | Cuts, story map, DoD, delivery outline | Active — M0 shipped |
+| **M0** | [m0-foundation.md](./m0-foundation.md) | Foundation PR sequence | Complete |
+| **M1** | [m1-accounts.md](./m1-accounts.md) | Accounts | Accepted — implement next |
 | **M2** | `m2-supply.md` | Supply | Not written |
 | **M3** | `m3-demand.md` | Demand | Not written |
 | **M4** | `m4-transaction.md` | Transaction | Not written |
 | **M5** | `m5-operate-and-bar.md` | Operate & bar | Not written |
+
+### Implementation progress
+
+| ID | Plan | Code on `main` | Evidence |
+|---|---|---|---|
+| **M0** | written | **Complete** — PRs [#7](https://github.com/natank/shearly/pull/7)–[#14](https://github.com/natank/shearly/pull/14) | CI gates 1–8 and Image smoke green on merge of #14 (`6b123c5`, 2026-08-14) |
+| **M1** | [accepted](./m1-accounts.md) | not started | `M1-P1`…`M1-P6` |
+| **M2** | not written | not started | — |
+| **M3** | not written | not started | — |
+| **M4** | not written | not started | — |
+| **M5** | not written | not started | — |
 
 Stable IDs: milestone `M0`…`M5`; PRs inside a milestone plan `M0-P1`, `M0-P2`, …. Implementation PRs cite both (`M0-P3`, `NFR-CI-001`).
 
@@ -31,6 +42,8 @@ This is the kickoff's Plan deliverable, split across this folder:
 
 1. **Master (this file)** — in vs out, milestone cuts, story → milestone map.
 2. **One file per milestone** — PR sequence, files, tests, exit checklist. Does not reopen architecture or the cuts.
+
+**Cadence (M0 retrospective — keep for M1–M5):** write **one** milestone plan, accept it, implement that sequence to exit, *then* write the next plan. Do not pre-write M2–M5 while implementing M1. The master already owns the cuts; a later file only sequences PRs inside its assigned stories.
 
 Architecture is decided in `03-design.md`. This folder does not reopen it.
 
@@ -132,15 +145,16 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M0 — Foundation
 
-**Plan:** [m0-foundation.md](./m0-foundation.md)
+**Plan:** [m0-foundation.md](./m0-foundation.md)  
+**Status:** Complete on `main` (2026-08-14). Residual: required status checks are not wired on branch protection — see M0 §6.
 
 **Goal.** The shape of the repo is the shape in design §3, and CI will not accept a boundary violation.
 
-**Builds:** Nx workspace; `type:app-api` / `type:app-web` / `type:service` / `type:contract` / `type:domain` tags; `apps/web`, `apps/admin`, `apps/api` shells; Compose (Postgres+PostGIS, Mailhog, Stripe CLI, geocoder stub); typed config; shadcn tokens; i18n routing + logical-CSS lint; GitHub Actions stages 1–8 on an empty tree; preview deploy of the empty app (DQ-2).
+**Builds:** Nx workspace; `type:app-api` / `type:app-web` / `type:service` / `type:contract` / `type:domain` tags; `apps/web`, `apps/admin`, `apps/api` shells; Compose (local Postgres 16 + Mailpit + geocoder stub; Stripe CLI profile; CI still uses PostGIS); typed config; shadcn tokens; i18n routing + logical-CSS lint; GitHub Actions stages 1–8; Fargate-shaped image + skip-safe ECR (DQ-2).
 
 **Stories:** none. NFRs: CI-001 skeleton, SEC-006, UX-001 tokens, I18N-001/002 wiring, CI-003 *harness* (a trivial both-locale smoke, not the booking path).
 
-**Exit.** `pnpm install && docker compose up -d && pnpm nx run-many -t serve` works. A PR that imports `libs/services/booking` from `apps/web` fails CI. `/he` and `/en` both render. Merge is already blocked on lint/type/test/build.
+**Exit.** `pnpm install && docker compose up -d && pnpm nx run-many -t serve` works. A PR that imports `libs/services/booking` from `apps/web` fails CI. `/he` and `/en` both render. Gates 1–8 run on every PR; required-check wiring on `main` is the residual in the M0 plan §6.
 
 **Not in M0.** Feature screens, Stripe live keys, real SES.
 
@@ -148,7 +162,8 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M1 — Accounts
 
-**Plan:** `m1-accounts.md` (not written)
+**Plan:** [m1-accounts.md](./m1-accounts.md)  
+**Status:** Accepted. Implementation not started.
 
 **Goal.** Identity is a real security perimeter: sessions, not JWTs; cookies per NFR-SEC-007; one role per account.
 
@@ -257,6 +272,7 @@ SC coverage by first milestone that can claim it:
 
 Shape is here; **PR lists live in the milestone files** (`M0-P1`, …).
 
+- **One milestone at a time.** M0 showed that deriving the next milestone plan, then implementing it, is the working loop. Preserve it: `write mN plan → accept → implement mN PRs to exit → write m{N+1}`. Do not batch-write remaining `mN-*.md` files, and do not start `m{N}/*` code before that plan exists.
 - **Branch:** `m{N}/{short-slug}` off `main`. One concern per PR, as kickoff requires.
 - **Merge:** design §10.1 gates 1–8. Not advisory. Occupancy and saga tests are required to merge any M4 booking-create PR.
 - **PR description:** milestone PR id (`M0-P3`), story IDs (`BOK-001`) when any, design section if it implements a named mechanism (`§8.4`), test evidence.
@@ -275,7 +291,7 @@ The Plan is not done until these are true on `main`. Individual milestones have 
 - [ ] Design mechanisms exist as tests, not comments: ranking stub swap, occupancy overlap race, saga retry, provider `PENDING` DTO has no street, both-locale booking E2E.
 - [ ] Secrets are not in the repo. Card data never touched Shearly logs.
 
-Implementation itself does not start when this Plan is approved. Kickoff §7: a separate go-ahead starts scaffolding (M0).
+M0 used a separate go-ahead (kickoff §7). Remaining milestones reuse the same gate at a smaller grain: the accepted `mN-*.md` file *is* the go-ahead for that increment only.
 
 ---
 
@@ -305,4 +321,4 @@ RAG has no hook in M0–M5 beyond "do not design around it."
 
 ## 10. Next Step
 
-Review **[m0-foundation.md](./m0-foundation.md)**. After M0's plan is accepted, write `m1-accounts.md`. Implementation still starts only on the separate go-ahead (kickoff §7).
+M0 is shipped. M1 plan is accepted. Implement [`m1-accounts.md`](./m1-accounts.md) `M1-P1`…`M1-P6` (CI green on each PR). Only then write `m2-supply.md`. Do not pre-write M3–M5.
