@@ -1,5 +1,5 @@
 import { loadConfig } from '@shearly/shared-config';
-import { migrateIdentity } from '@shearly/services-identity';
+import { migrateIdentity } from '@shearly/services-identity/migrate';
 
 const config = loadConfig();
 const applied = await migrateIdentity(config.databaseUrl);

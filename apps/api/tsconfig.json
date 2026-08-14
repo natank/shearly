@@ -13,6 +13,9 @@
       "path": "../../libs/services/identity"
     },
     {
+      "path": "../../libs/contracts/identity"
+    },
+    {
       "path": "../../libs/shared/config"
     },
     {

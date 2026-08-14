@@ -1,8 +1,19 @@
-/**
- * Composition root (design §2.4).
- * The only place service implementations are constructed.
- * Empty in M0-P2 — no services wired yet.
- */
-export function compose(): Record<string, never> {
-  return {};
+import pg from 'pg';
+import { loadConfig, type AppConfig } from '@shearly/shared-config';
+import { IdentityService } from '@shearly/services-identity';
+
+export type AppServices = {
+  config: AppConfig;
+  identity: IdentityService;
+  pool: pg.Pool;
+};
+
+export function compose(source?: NodeJS.ProcessEnv): AppServices {
+  const config = loadConfig(source);
+  const pool = new pg.Pool({ connectionString: config.databaseUrl });
+  return {
+    config,
+    pool,
+    identity: new IdentityService(pool, config),
+  };
 }

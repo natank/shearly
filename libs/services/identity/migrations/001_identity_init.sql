@@ -1,4 +1,10 @@
-CREATE SCHEMA IF NOT EXISTS identity;
+DO $identity_schema$
+BEGIN
+  CREATE SCHEMA IF NOT EXISTS identity;
+EXCEPTION
+  WHEN duplicate_schema THEN NULL;
+END
+$identity_schema$;
 
 CREATE TABLE IF NOT EXISTS identity.schema_migrations (
   id text PRIMARY KEY,

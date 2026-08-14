@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  plugins: [tsconfigPaths({ root: '../../../' })],
   test: {
     globals: true,
+    fileParallelism: false,
     include: ['src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
