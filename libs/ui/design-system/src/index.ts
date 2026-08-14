@@ -1,2 +1,2 @@
-export { Button, type ButtonProps } from './components/button.js';
-export { cn } from './lib/utils.js';
+export { Button, type ButtonProps } from './components/button';
+export { cn } from './lib/utils';

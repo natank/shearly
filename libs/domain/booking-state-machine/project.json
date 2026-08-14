@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/domain/booking-state-machine/src",
   "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/domain/booking-state-machine/vitest.config.ts"
+      }
+    }
+  },
   "tags": ["type:domain"]
 }

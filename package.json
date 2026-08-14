@@ -15,7 +15,8 @@
     "format:check": "prettier --check .",
     "test:geocoder-stub": "node --test tools/geocoder-stub/server.spec.mjs",
     "check:i18n": "node scripts/check-hardcoded-strings.mjs",
-    "check:rtl": "node scripts/check-physical-styles.mjs apps/web apps/admin libs/ui"
+    "check:rtl": "node scripts/check-physical-styles.mjs apps/web apps/admin libs/ui",
+    "e2e": "nx e2e web-e2e"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -23,13 +24,17 @@
     "@nx/eslint-plugin": "^23.1.1",
     "@nx/js": "^23.1.1",
     "@nx/vitest": "^23.1.1",
+    "@playwright/test": "^1.62.1",
     "@types/eslint": "^9.6.1",
     "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.5.4",
     "eslint": "^9.39.5",
     "nx": "^23.1.1",
+    "pg": "^8.23.0",
     "postcss": "^8.5.26",
     "prettier": "^3.9.6",
     "tailwindcss": "^3.4.19",

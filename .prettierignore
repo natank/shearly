@@ -4,3 +4,6 @@ coverage
 .nx
 pnpm-lock.yaml
 node_modules
+docs
+test-results
+playwright-report

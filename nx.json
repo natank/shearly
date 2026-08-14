@@ -10,6 +10,9 @@
     ],
     "sharedGlobals": ["{workspaceRoot}/eslint.config.mjs", "{workspaceRoot}/tsconfig.base.json"]
   },
+  "sync": {
+    "disabledTaskSyncGenerators": ["@nx/js:typescript-sync"]
+  },
   "targetDefaults": {
     "lint": {
       "cache": true
@@ -29,7 +32,7 @@
           "targetName": "typecheck"
         }
       },
-      "exclude": ["apps/web/**", "apps/admin/**"]
+      "exclude": ["apps/web/**", "apps/admin/**", "apps/web-e2e/**"]
     },
     {
       "plugin": "@nx/eslint/plugin",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ValidationError, toErrorBody } from './app-error.js';
+import { ValidationError, toErrorBody } from './index.js';
 
 describe('toErrorBody', () => {
   it('exposes a translation key and no English sentence', () => {

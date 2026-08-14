@@ -91,6 +91,9 @@
     },
     {
       "path": "./apps/api"
+    },
+    {
+      "path": "./tools/integration"
     }
   ]
 }

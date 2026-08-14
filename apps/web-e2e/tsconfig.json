@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/out-tsc/apps/web-e2e",
+    "rootDir": "src",
+    "types": ["node"],
+    "declaration": false,
+    "composite": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

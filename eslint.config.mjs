@@ -4,7 +4,16 @@ export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   {
-    ignores: ['**/dist', '**/coverage', '**/node_modules', '**/.nx', '**/.next'],
+    ignores: [
+      '**/dist',
+      '**/coverage',
+      '**/node_modules',
+      '**/.nx',
+      '**/.next',
+      '**/next-env.d.ts',
+      '**/test-results',
+      '**/playwright-report',
+    ],
   },
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
@@ -69,7 +78,13 @@ export default [
     },
   },
   {
-    files: ['libs/shared/config/**/*.ts'],
+    files: [
+      'libs/shared/config/**/*.ts',
+      'tools/integration/**/*.ts',
+      'apps/web-e2e/**/*.ts',
+      '**/vitest.config.ts',
+      '**/playwright.config.ts',
+    ],
     rules: {
       'no-restricted-syntax': 'off',
     },
