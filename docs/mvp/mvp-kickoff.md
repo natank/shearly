@@ -96,7 +96,7 @@ This kickoff covers **phase MVP**. Later phases (Phase 2, Phase 3, Phase 4) repe
 | Vision | Project | `docs/01-vision.md` |
 | Requirements | Phase MVP | `docs/mvp/02-requirements.md` |
 | Design | Phase MVP | `docs/mvp/03-design.md` |
-| Plan | Phase MVP | `docs/mvp/04-implementation-plan.md` |
+| Plan | Phase MVP | `docs/mvp/04-implementation-plan/` (master + one file per milestone) |
 
 Each file below is its own PR. Do not start the next stage until the previous is approved.
 
@@ -109,8 +109,10 @@ Epics → user stories with acceptance criteria, covering the full lifecycle lis
 ### Design — MVP (`docs/mvp/03-design.md`)
 Microservices breakdown and the reasoning behind the split (e.g. identity, provider-catalog, booking, payments, notifications); Nx apps/libs layout; frontend architecture (framework, design system, state management, i18next + RTL strategy); backend architecture (API style, inter-service communication, per-service data storage); where any MVP-selected agentic AI feature fits; local dev environment and config management; CI/CD pipeline design (pipeline steps, testing strategy — unit/integration/e2e — quality gates, and a justified AWS deployment target); Stripe integration safety and secrets management.
 
-### Plan — MVP (`docs/mvp/04-implementation-plan.md`)
-MVP scope as a concrete slice of the requirements stories (in vs. out); build sequencing and milestones with rationale (e.g. skeleton monorepo + CI first, then core booking flow, then payments, then polish); branching workflow, PR template expectations, and merge criteria tied to the design doc's CI/CD gates; post-MVP roadmap (next verticals, RAG entry point, deferred agentic features); Definition of Done matching the submission bar.
+### Plan — MVP (`docs/mvp/04-implementation-plan/`)
+Master plan (`04-implementation-plan.md`): MVP scope as a concrete slice of the requirements stories (in vs. out); build sequencing and milestones with rationale; branching workflow, PR template expectations, and merge criteria tied to the design doc's CI/CD gates; post-MVP roadmap; Definition of Done matching the submission bar.
+
+One plan file per milestone (`m0-foundation.md`, …) holds that milestone's PR sequence, files, and tests. Story IDs stay on the master map; milestone files must not move them silently.
 
 ---
 
