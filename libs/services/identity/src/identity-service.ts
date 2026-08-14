@@ -3,11 +3,17 @@ import pg from 'pg';
 import { AppError, ValidationError } from '@shearly/shared-errors';
 import type { Locale, PublicAccount, RegisterRole } from '@shearly/contracts-identity';
 import type { AppConfig } from '@shearly/shared-config';
+import type { SendMail } from './mailer.js';
 import { assertPasswordPolicy, dummyVerify, hashPassword, verifyPassword } from './password.js';
 
 export type IdentityConfig = Pick<
   AppConfig,
-  'passwordMinLength' | 'sessionTtlHours' | 'authRateLimitMax' | 'authRateLimitWindowSec'
+  | 'passwordMinLength'
+  | 'sessionTtlHours'
+  | 'authRateLimitMax'
+  | 'authRateLimitWindowSec'
+  | 'webOrigin'
+  | 'resetTokenTtlHours'
 >;
 
 type AccountRow = {
@@ -30,6 +36,7 @@ export class IdentityService {
   constructor(
     private readonly pool: pg.Pool,
     private readonly config: IdentityConfig,
+    private readonly sendMail: SendMail = async () => undefined,
   ) {}
 
   async register(input: {
@@ -99,6 +106,62 @@ export class IdentityService {
     await this.pool.query('DELETE FROM identity.sessions WHERE token_hash = $1', [
       hashToken(sessionToken),
     ]);
+  }
+
+  async requestPasswordReset(input: { email: string; locale: Locale; ip: string }): Promise<void> {
+    await this.enforceRateLimit('reset', input.ip);
+    const account = await this.findByEmail(input.email);
+    if (!account) {
+      return;
+    }
+    const token = randomBytes(32).toString('base64url');
+    await this.pool.query(
+      `INSERT INTO identity.password_reset_tokens (account_id, token_hash, expires_at)
+       VALUES ($1, $2, now() + ($3::text || ' hours')::interval)`,
+      [account.id, hashToken(token), String(this.config.resetTokenTtlHours)],
+    );
+    const resetUrl = `${this.config.webOrigin.replace(/\/$/, '')}/${input.locale}/reset-password?token=${token}`;
+    await this.sendMail({
+      to: account.email,
+      subject: 'Shearly password reset',
+      text: `Reset your password: ${resetUrl}`,
+    });
+  }
+
+  async confirmPasswordReset(input: { token: string; password: string }): Promise<void> {
+    try {
+      assertPasswordPolicy(input.password, this.config.passwordMinLength);
+    } catch {
+      throw new ValidationError('errors.passwordTooShort');
+    }
+    const result = await this.pool.query<{ id: string; account_id: string }>(
+      `SELECT id, account_id FROM identity.password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
+      [hashToken(input.token)],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new ValidationError('auth.resetInvalid');
+    }
+    const passwordHash = await hashPassword(input.password);
+    await this.pool.query('BEGIN');
+    try {
+      await this.pool.query(
+        `UPDATE identity.accounts SET password_hash = $1, updated_at = now() WHERE id = $2`,
+        [passwordHash, row.account_id],
+      );
+      await this.pool.query(
+        `UPDATE identity.password_reset_tokens SET used_at = now() WHERE id = $1`,
+        [row.id],
+      );
+      await this.pool.query('DELETE FROM identity.sessions WHERE account_id = $1', [
+        row.account_id,
+      ]);
+      await this.pool.query('COMMIT');
+    } catch (error) {
+      await this.pool.query('ROLLBACK');
+      throw error;
+    }
   }
 
   async accountFromSession(sessionToken: string | undefined): Promise<PublicAccount | null> {

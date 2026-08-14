@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { loadConfig, type AppConfig } from '@shearly/shared-config';
-import { IdentityService } from '@shearly/services-identity';
+import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/services-identity';
 
 export type AppServices = {
   config: AppConfig;
@@ -8,12 +8,12 @@ export type AppServices = {
   pool: pg.Pool;
 };
 
-export function compose(source?: NodeJS.ProcessEnv): AppServices {
+export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppServices {
   const config = loadConfig(source);
   const pool = new pg.Pool({ connectionString: config.databaseUrl });
   return {
     config,
     pool,
-    identity: new IdentityService(pool, config),
+    identity: new IdentityService(pool, config, sendMail ?? createSmtpMailer(config.smtpUrl)),
   };
 }

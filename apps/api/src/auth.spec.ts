@@ -11,7 +11,7 @@ function cookie(res: Response): string {
 }
 
 describe('auth HTTP', () => {
-  const services = url ? compose() : null;
+  const services = url ? compose(undefined, async () => undefined) : null;
   const app = services ? createApp(services) : null;
 
   beforeAll(async () => {
@@ -110,5 +110,37 @@ describe('auth HTTP', () => {
     const wrongBody = await wrong.json();
     expect(unknownBody).toEqual(wrongBody);
     expect(wrongBody).toEqual({ ok: false, translationKey: 'auth.invalidCredentials' });
+  });
+
+  it('returns the same JSON for reset requests whether the email exists', async () => {
+    if (!app) {
+      return;
+    }
+    const email = `rst-http-${crypto.randomUUID()}@example.com`;
+    await app.request('/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.10' },
+      body: JSON.stringify({
+        email,
+        password: 'long-enough-password',
+        role: 'customer',
+        locale: 'en',
+      }),
+    });
+    const known = await app.request('/auth/password-reset/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.11' },
+      body: JSON.stringify({ email, locale: 'en' }),
+    });
+    const unknown = await app.request('/auth/password-reset/request', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.12' },
+      body: JSON.stringify({ email: `no-${crypto.randomUUID()}@example.com`, locale: 'en' }),
+    });
+    expect(known.status).toBe(200);
+    const knownBody = await known.json();
+    const unknownBody = await unknown.json();
+    expect(knownBody).toEqual(unknownBody);
+    expect(unknownBody).toEqual({ ok: true, translationKey: 'auth.resetRequested' });
   });
 });
