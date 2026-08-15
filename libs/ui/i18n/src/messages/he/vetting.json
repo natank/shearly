@@ -4,5 +4,7 @@
   "interview": "קביעת ראיון",
   "approve": "אישור",
   "reject": "דחייה",
-  "openDoc": "פתיחת מסמך"
+  "openDoc": "פתיחת מסמך",
+  "statusPending": "ממתין לראיון",
+  "statusInterview": "הראיון נקבע — אשרו אחרי השיחה"
 }

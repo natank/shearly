@@ -332,13 +332,19 @@ export function ProviderDashboard() {
 
       <Section title={t('goLive')}>
         <p className="text-sm">{goLive?.ready ? t('ready') : t('notReady')}</p>
-        {goLive?.missing?.length ? (
-          <p className="text-sm">
-            {t('missing')}
-            {': '}
-            {goLive.missing.join(', ')}
+        {goLive?.missing?.map((item) => (
+          <p key={item} className="text-sm">
+            {item === 'vetting'
+              ? t('missingVetting')
+              : item === 'connect'
+                ? t('missingConnect')
+                : item === 'services'
+                  ? t('missingServices')
+                  : item === 'availability'
+                    ? t('missingAvailability')
+                    : item}
           </p>
-        ) : null}
+        ))}
         <Button
           type="button"
           variant="outline"

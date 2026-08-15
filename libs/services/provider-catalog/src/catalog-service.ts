@@ -122,7 +122,7 @@ export class CatalogService {
   async listQueue(): Promise<ProviderRow[]> {
     const result = await this.pool.query<ProviderRow>(
       `SELECT ${PROVIDER_COLS} FROM catalog.providers
-       WHERE status = 'pending_review'
+       WHERE status IN ('pending_review', 'interview_scheduled')
        ORDER BY created_at ASC`,
     );
     return result.rows;

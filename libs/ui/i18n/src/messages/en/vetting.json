@@ -4,5 +4,7 @@
   "interview": "Schedule interview",
   "approve": "Approve",
   "reject": "Reject",
-  "openDoc": "Open document"
+  "openDoc": "Open document",
+  "statusPending": "Waiting for interview",
+  "statusInterview": "Interview scheduled — approve when the call is done"
 }
