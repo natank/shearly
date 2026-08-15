@@ -4,7 +4,7 @@ On-demand marketplace for home beauty services.
 
 ## Status
 
-MVP documentation is in `/docs`. **M0–M2** are on `main`. Next: `docs/mvp/04-implementation-plan/m3-demand.md`.
+MVP documentation is in `/docs`. **M0–M2** are on `main`. **M3** plan is accepted: `docs/mvp/04-implementation-plan/m3-demand.md`.
 
 ## Local (M0)
 
