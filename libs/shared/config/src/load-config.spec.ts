@@ -20,5 +20,8 @@ describe('loadConfig', () => {
     expect(config.apiPort).toBe(4000);
     expect(config.passwordMinLength).toBe(10);
     expect(config.sessionCookieName).toBe('shearly_session');
+    expect(config.rankingImpl).toBe('deterministic');
+    expect(config.rankWeightDistance).toBe(0.4);
+    expect(config.newProviderReviewThreshold).toBe(3);
   });
 });

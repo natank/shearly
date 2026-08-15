@@ -4,6 +4,7 @@ import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/servi
 import { CatalogService, FsDocumentStore } from '@shearly/services-provider-catalog';
 import { AvailabilityService } from '@shearly/services-availability';
 import { ConnectService } from '@shearly/services-payments';
+import { DeterministicRanker, StubRanker, type ProviderRanker } from '@shearly/domain-ranking';
 
 export type AppServices = {
   config: AppConfig;
@@ -11,8 +12,22 @@ export type AppServices = {
   catalog: CatalogService;
   availability: AvailabilityService;
   payments: ConnectService;
+  ranker: ProviderRanker;
   pool: pg.Pool;
 };
+
+export function createRanker(config: AppConfig): ProviderRanker {
+  if (config.rankingImpl === 'stub') {
+    return new StubRanker();
+  }
+  return new DeterministicRanker({
+    distance: config.rankWeightDistance,
+    availability: config.rankWeightAvailability,
+    rating: config.rankWeightRating,
+    completions: config.rankWeightCompletions,
+    newProviderReviewThreshold: config.newProviderReviewThreshold,
+  });
+}
 
 export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppServices {
   const config = loadConfig(source);
@@ -27,7 +42,8 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
       config.radiusCapKm,
       config.commissionRate,
     ),
-    availability: new AvailabilityService(pool),
+    availability: new AvailabilityService(pool, config.discoveryWindowDays),
     payments: new ConnectService(pool),
+    ranker: createRanker(config),
   };
 }
