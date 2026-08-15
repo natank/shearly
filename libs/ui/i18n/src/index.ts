@@ -3,6 +3,7 @@ export type { Locale } from './locales';
 export {
   loadAccountMessages,
   loadCommonMessages,
+  loadDiscoveryMessages,
   loadProviderMessages,
   loadVettingMessages,
 } from './load-messages';

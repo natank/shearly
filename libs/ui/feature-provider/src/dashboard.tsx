@@ -40,6 +40,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 type Profile = {
   bio: string;
+  displayName: string;
   baseLat: number | null;
   baseLng: number | null;
   radiusKm: number | null;
@@ -53,6 +54,7 @@ export function ProviderDashboard() {
   const [missing, setMissing] = useState<string[]>([]);
   const [profile, setProfile] = useState<Profile>({
     bio: '',
+    displayName: '',
     baseLat: null,
     baseLng: null,
     radiusKm: null,
@@ -75,7 +77,13 @@ export function ProviderDashboard() {
     setStatus(app.status);
     setMissing(app.missing);
     if (app.profile) {
-      setProfile(app.profile);
+      setProfile({
+        bio: app.profile.bio ?? '',
+        displayName: app.profile.displayName ?? '',
+        baseLat: app.profile.baseLat,
+        baseLng: app.profile.baseLng,
+        radiusKm: app.profile.radiusKm,
+      });
     }
     const listed = await json<{ services: Service[] }>('/api/catalog/me/services');
     setServices(listed.services);
@@ -114,6 +122,7 @@ export function ProviderDashboard() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         bio: profile.bio,
+        displayName: profile.displayName,
         baseLat: profile.baseLat,
         baseLng: profile.baseLng,
         radiusKm: profile.radiusKm,
@@ -204,6 +213,13 @@ export function ProviderDashboard() {
 
       <Section title={t('profile')}>
         <form onSubmit={onProfile} className="flex flex-col gap-3">
+          <Field label={t('displayName')}>
+            <Input
+              name="displayName"
+              value={profile.displayName}
+              onChange={(event) => setProfile({ ...profile, displayName: event.target.value })}
+            />
+          </Field>
           <Field label={t('bio')}>
             <Input
               name="bio"

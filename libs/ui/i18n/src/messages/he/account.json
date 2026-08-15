@@ -22,5 +22,11 @@
   "invalidCredentials": "אימייל או סיסמה שגויים.",
   "adminOnly": "המסך הזה מיועד למנהלים.",
   "needAccount": "אין לך חשבון?",
-  "haveAccount": "כבר יש לך חשבון?"
+  "haveAccount": "כבר יש לך חשבון?",
+  "addresses": "כתובות שמורות",
+  "addressLabel": "תווית",
+  "addressLine": "כתובת",
+  "accessNotes": "הערות כניסה",
+  "saveAddress": "שמירת כתובת",
+  "deleteAddress": "הסרה"
 }

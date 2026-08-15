@@ -5,6 +5,7 @@
   "dependencies": {
     "@shearly/contracts-identity": "workspace:*",
     "@shearly/feature-account": "workspace:*",
+    "@shearly/feature-discovery": "workspace:*",
     "@shearly/feature-provider": "workspace:*",
     "@shearly/ui-design-system": "workspace:*",
     "@shearly/ui-i18n": "workspace:*"

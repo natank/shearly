@@ -22,5 +22,11 @@
   "invalidCredentials": "Email or password is incorrect.",
   "adminOnly": "This surface is for administrators.",
   "needAccount": "Need an account?",
-  "haveAccount": "Already have an account?"
+  "haveAccount": "Already have an account?",
+  "addresses": "Saved addresses",
+  "addressLabel": "Label",
+  "addressLine": "Address",
+  "accessNotes": "Access notes",
+  "saveAddress": "Save address",
+  "deleteAddress": "Remove"
 }

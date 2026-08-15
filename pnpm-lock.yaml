@@ -149,6 +149,9 @@ importers:
       '@shearly/feature-account':
         specifier: workspace:*
         version: link:../../libs/ui/feature-account
+      '@shearly/feature-discovery':
+        specifier: workspace:*
+        version: link:../../libs/ui/feature-discovery
       '@shearly/feature-provider':
         specifier: workspace:*
         version: link:../../libs/ui/feature-provider
@@ -216,7 +219,11 @@ importers:
 
   libs/ui/feature-booking: {}
 
-  libs/ui/feature-discovery: {}
+  libs/ui/feature-discovery:
+    dependencies:
+      '@shearly/ui-design-system':
+        specifier: workspace:*
+        version: link:../design-system
 
   libs/ui/feature-provider:
     dependencies:

@@ -3,6 +3,7 @@ import { hasLocale } from 'next-intl';
 import {
   loadAccountMessages,
   loadCommonMessages,
+  loadDiscoveryMessages,
   loadProviderMessages,
   routing,
 } from '@shearly/ui-i18n';
@@ -16,6 +17,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
       common: await loadCommonMessages(locale),
       account: await loadAccountMessages(locale),
       provider: await loadProviderMessages(locale),
+      discovery: await loadDiscoveryMessages(locale),
     },
   };
 });
