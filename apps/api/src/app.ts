@@ -9,7 +9,10 @@ import { compose, type AppServices } from './compose.js';
 export function createApp(services: AppServices = compose()) {
   const app = new Hono();
   const auth = createAuthRoutes(services.identity, services.config, services.catalog);
-  const catalog = createCatalogRoutes(services.identity, services.catalog, services.config);
+  const catalog = createCatalogRoutes(services.identity, services.catalog, services.config, {
+    availability: services.availability,
+    payments: services.payments,
+  });
   const availability = createAvailabilityRoutes(
     services.identity,
     services.availability,
