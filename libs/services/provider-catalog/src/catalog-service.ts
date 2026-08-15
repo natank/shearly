@@ -15,10 +15,16 @@ export type ProviderRow = {
   status: ProviderStatus;
   listed: boolean;
   bio: string | null;
+  display_name: string | null;
   base_lat: number | null;
   base_lng: number | null;
   radius_km: number | null;
+  rating_sum: number;
+  rating_count: number;
+  completion_count: number;
 };
+
+export type ListedProvider = ProviderRow & { distance_km: number };
 
 export type DocumentMeta = {
   id: string;
@@ -27,7 +33,7 @@ export type DocumentMeta = {
   content_type: string;
 };
 
-const PROVIDER_COLS = `id, account_id, status, listed, bio, base_lat, base_lng, radius_km`;
+const PROVIDER_COLS = `id, account_id, status, listed, bio, display_name, base_lat, base_lng, radius_km, rating_sum, rating_count, completion_count`;
 
 export type ServiceRow = {
   id: string;
@@ -175,7 +181,13 @@ export class CatalogService {
 
   async updateProfile(
     accountId: string,
-    input: { bio?: string; baseLat?: number; baseLng?: number; radiusKm?: number },
+    input: {
+      bio?: string;
+      displayName?: string;
+      baseLat?: number;
+      baseLng?: number;
+      radiusKm?: number;
+    },
   ): Promise<ProviderRow> {
     const provider = await this.requireOwn(accountId);
     if (input.radiusKm !== undefined && input.radiusKm > this.radiusCapKm) {
@@ -184,21 +196,51 @@ export class CatalogService {
     const updated = await this.pool.query<ProviderRow>(
       `UPDATE catalog.providers SET
          bio = COALESCE($2, bio),
-         base_lat = COALESCE($3, base_lat),
-         base_lng = COALESCE($4, base_lng),
-         radius_km = COALESCE($5, radius_km),
+         display_name = COALESCE($3, display_name),
+         base_lat = COALESCE($4, base_lat),
+         base_lng = COALESCE($5, base_lng),
+         radius_km = COALESCE($6, radius_km),
+         location = CASE
+           WHEN $4 IS NOT NULL AND $5 IS NOT NULL
+             THEN ST_SetSRID(ST_MakePoint($5, $4), 4326)::geography
+           ELSE location
+         END,
          updated_at = now()
        WHERE id = $1
        RETURNING ${PROVIDER_COLS}`,
       [
         provider.id,
         input.bio ?? null,
+        input.displayName ?? null,
         input.baseLat ?? null,
         input.baseLng ?? null,
         input.radiusKm ?? null,
       ],
     );
     return updated.rows[0];
+  }
+
+  async listInRadius(input: { lat: number; lng: number }): Promise<ListedProvider[]> {
+    const result = await this.pool.query<ListedProvider>(
+      `SELECT ${PROVIDER_COLS},
+              ST_Distance(
+                location,
+                ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
+              ) / 1000 AS distance_km
+       FROM catalog.providers
+       WHERE listed = true
+         AND status = 'approved'
+         AND location IS NOT NULL
+         AND radius_km IS NOT NULL
+         AND ST_DWithin(
+           location,
+           ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography,
+           radius_km * 1000
+         )
+       ORDER BY distance_km ASC, id ASC`,
+      [input.lat, input.lng],
+    );
+    return result.rows.map((row) => ({ ...row, distance_km: Number(row.distance_km) }));
   }
 
   async addService(

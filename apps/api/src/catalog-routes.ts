@@ -29,6 +29,7 @@ export function createCatalogRoutes(
       documents: application.documents,
       profile: {
         bio: provider.bio ?? '',
+        displayName: provider.display_name ?? '',
         baseLat: provider.base_lat,
         baseLng: provider.base_lng,
         radiusKm: provider.radius_km,
@@ -58,6 +59,7 @@ export function createCatalogRoutes(
     const account = await requireProvider(c, identity, config);
     const body = (await c.req.json().catch(() => null)) as {
       bio?: string;
+      displayName?: string;
       baseLat?: number;
       baseLng?: number;
       radiusKm?: number;
