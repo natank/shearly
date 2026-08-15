@@ -3,12 +3,14 @@ import { loadConfig, type AppConfig } from '@shearly/shared-config';
 import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/services-identity';
 import { CatalogService, FsDocumentStore } from '@shearly/services-provider-catalog';
 import { AvailabilityService } from '@shearly/services-availability';
+import { ConnectService } from '@shearly/services-payments';
 
 export type AppServices = {
   config: AppConfig;
   identity: IdentityService;
   catalog: CatalogService;
   availability: AvailabilityService;
+  payments: ConnectService;
   pool: pg.Pool;
 };
 
@@ -26,5 +28,6 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
       config.commissionRate,
     ),
     availability: new AvailabilityService(pool),
+    payments: new ConnectService(pool),
   };
 }

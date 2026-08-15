@@ -2,7 +2,10 @@ import { Hono } from 'hono';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
 import type { CatalogService, DocKind } from '@shearly/services-provider-catalog';
+import type { AvailabilityService } from '@shearly/services-availability';
+import type { ConnectService } from '@shearly/services-payments';
 import { ValidationError } from '@shearly/shared-errors';
+import { evaluateGoLive } from './go-live.js';
 import { requireAdmin, requireProvider } from './session.js';
 
 const kinds = new Set<DocKind>(['government_id', 'credential', 'portfolio']);
@@ -11,6 +14,7 @@ export function createCatalogRoutes(
   identity: IdentityService,
   catalog: CatalogService,
   config: AppConfig,
+  extras?: { availability: AvailabilityService; payments: ConnectService },
 ) {
   const routes = new Hono();
 
@@ -93,6 +97,66 @@ export function createCatalogRoutes(
     const account = await requireProvider(c, identity, config);
     const provider = await catalog.submit(account.id);
     return c.json({ status: provider.status });
+  });
+
+  routes.get('/catalog/me/go-live', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const provider = await catalog.ensureDraft(account.id);
+    const status = evaluateGoLive({
+      approved: provider.status === 'approved',
+      connectComplete: extras ? await extras.payments.isComplete(account.id) : false,
+      serviceCount: await catalog.serviceCount(account.id),
+      hasAvailability: extras ? await extras.availability.hasAvailability(account.id) : false,
+    });
+    if (!status.ready && provider.listed) {
+      await catalog.setListed(account.id, false);
+    }
+    return c.json({ ...status, listed: status.ready && provider.listed });
+  });
+
+  routes.post('/catalog/me/go-live', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const body = (await c.req.json().catch(() => null)) as { listed?: boolean } | null;
+    if (body?.listed === undefined) {
+      throw new ValidationError('errors.validation');
+    }
+    const provider = await catalog.ensureDraft(account.id);
+    const status = evaluateGoLive({
+      approved: provider.status === 'approved',
+      connectComplete: extras ? await extras.payments.isComplete(account.id) : false,
+      serviceCount: await catalog.serviceCount(account.id),
+      hasAvailability: extras ? await extras.availability.hasAvailability(account.id) : false,
+    });
+    if (body.listed && !status.ready) {
+      throw new ValidationError(`catalog.goLiveMissing:${status.missing.join(',')}`);
+    }
+    const updated = await catalog.setListed(account.id, body.listed);
+    return c.json({ listed: updated.listed, ...status });
+  });
+
+  routes.post('/payments/me/connect/start', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    if (!extras) {
+      throw new ValidationError('errors.validation');
+    }
+    return c.json(await extras.payments.startOnboarding(account.id, config.stripeSecretKey));
+  });
+
+  routes.post('/payments/me/connect/stub-complete', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    if (!extras) {
+      throw new ValidationError('errors.validation');
+    }
+    await extras.payments.completeStub(account.id);
+    return c.json({ status: 'complete' });
+  });
+
+  routes.get('/payments/me/connect', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    if (!extras) {
+      throw new ValidationError('errors.validation');
+    }
+    return c.json(await extras.payments.getStatus(account.id));
   });
 
   routes.get('/admin/vetting', async (c) => {

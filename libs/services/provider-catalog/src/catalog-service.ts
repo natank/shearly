@@ -242,6 +242,16 @@ export class CatalogService {
     return splitPrice(service.price_minor, this.commissionRate);
   }
 
+  async setListed(accountId: string, listed: boolean): Promise<ProviderRow> {
+    const provider = await this.requireOwn(accountId);
+    const updated = await this.pool.query<ProviderRow>(
+      `UPDATE catalog.providers SET listed = $2, updated_at = now() WHERE id = $1
+       RETURNING ${PROVIDER_COLS}`,
+      [provider.id, listed],
+    );
+    return updated.rows[0];
+  }
+
   async serviceCount(accountId: string): Promise<number> {
     const provider = await this.getByAccount(accountId);
     if (!provider) {
