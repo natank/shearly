@@ -61,7 +61,6 @@ export function DiscoveryProfile({ providerId }: { providerId: string }) {
         <p className="text-sm">{t('vettingBadge')}</p>
         <p className="text-sm">{profile.provider.bio}</p>
         {profile.portfolio[0] ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={profile.portfolio[0].url}
             alt=""
