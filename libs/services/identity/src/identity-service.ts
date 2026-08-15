@@ -237,7 +237,59 @@ export class IdentityService {
       throw new AppError('RATE_LIMITED', 'errors.rateLimited', 429);
     }
   }
+
+  async listAddresses(accountId: string): Promise<AddressRow[]> {
+    const result = await this.pool.query<AddressRow>(
+      `SELECT id, account_id, label, line, lat, lng, access_notes
+       FROM identity.addresses WHERE account_id = $1 ORDER BY created_at ASC`,
+      [accountId],
+    );
+    return result.rows;
+  }
+
+  async addAddress(
+    accountId: string,
+    input: { label: string; line: string; lat: number; lng: number; accessNotes?: string },
+  ): Promise<AddressRow> {
+    if (!input.label.trim() || !input.line.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    const inserted = await this.pool.query<AddressRow>(
+      `INSERT INTO identity.addresses (account_id, label, line, lat, lng, access_notes)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, account_id, label, line, lat, lng, access_notes`,
+      [
+        accountId,
+        input.label.trim(),
+        input.line.trim(),
+        input.lat,
+        input.lng,
+        input.accessNotes ?? '',
+      ],
+    );
+    return inserted.rows[0];
+  }
+
+  async deleteAddress(accountId: string, addressId: string): Promise<void> {
+    const result = await this.pool.query(
+      `DELETE FROM identity.addresses WHERE id = $1 AND account_id = $2`,
+      [addressId, accountId],
+    );
+    if (!result.rowCount) {
+      throw new ValidationError('account.addressNotFound');
+    }
+  }
 }
+
+export type AddressRow = {
+  id: string;
+  account_id: string;
+  label: string;
+  line: string;
+  lat: number;
+  lng: number;
+  access_notes: string;
+};
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
