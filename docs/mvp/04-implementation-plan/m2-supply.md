@@ -6,8 +6,8 @@
 **Requirements:** PRV-002, PRV-003, PRV-004, PRV-005, PAY-005, AVL-001, AVL-002, AVL-003, AVL-004, OPS-001. NFR-SEC-002.  
 **Depends on:** M1 complete  
 **Unlocks:** M3 honest discovery  
-**Status:** Accepted (auto-approved after M1 cadence)  
-**Implementation:** not started — this file is the go-ahead for `m2/*` only
+**Status:** Complete  
+**Implementation:** shipped on `main` 2026-08-15 (merge of [#30](https://github.com/natank/shearly/pull/30))
 
 ---
 
@@ -80,6 +80,18 @@ M2-P7 E2E both locales
 ```
 
 Nothing is parallel. M0/M1 smokes must stay green.
+
+### Delivery (as shipped)
+
+| Plan ID | PR | Title | Merged |
+|---|---|---|---|
+| M2-P1 | [#24](https://github.com/natank/shearly/pull/24) | Catalog, availability, and payments schemas | 2026-08-15 |
+| M2-P2 | [#25](https://github.com/natank/shearly/pull/25) | Vetting packet, private docs, admin queue | 2026-08-15 |
+| M2-P3 | [#26](https://github.com/natank/shearly/pull/26) | Profile, services, and net price | 2026-08-15 |
+| M2-P4 | [#27](https://github.com/natank/shearly/pull/27) | Slot computation and availability | 2026-08-15 |
+| M2-P5 | [#28](https://github.com/natank/shearly/pull/28) | Connect stub and go-live | 2026-08-15 |
+| M2-P6 | [#29](https://github.com/natank/shearly/pull/29) | Provider dashboard and admin vetting UI | 2026-08-15 |
+| M2-P7 | [#30](https://github.com/natank/shearly/pull/30) | Supply loop test and locale smoke | 2026-08-15 |
 
 ### M2-P1 — Schemas and migrate
 
@@ -238,18 +250,18 @@ pnpm nx run-many -t serve -p web,api,admin
 
 ## 6. Exit checklist
 
-- [ ] Provider can submit ID + credential + ≥5 photos; incomplete lists missing items (PRV-002)
-- [ ] Admin queue oldest-first; interview then approve/reject with rationale (PRV-003, OPS-001)
-- [ ] Opening an ID writes `document_access_log`; non-admin cannot (NFR-SEC-002)
-- [ ] Approved provider sets bio, point, radius ≤ 15 km, 60-minute priced service; net shown (PRV-004)
-- [ ] Weekly pattern + one blocked day; slots honor duration and travel buffer (AVL-001…003)
-- [ ] Block that overlaps fixture occupancy is rejected with those ids (AVL-002)
-- [ ] Schedule surface exists (AVL-004) even if bookings are fixtures
-- [ ] Connect stub (or hosted link) gates go-live; missing prereqs named (PAY-005, PRV-005)
-- [ ] Provider A cannot read/write provider B (NFR-SEC-008)
-- [ ] `/he` and `/en` provider/admin strings; M0/M1 smokes still pass
-- [ ] CI 1–8 green on every M2 PR
-- [ ] No booking rows; no public discovery
+- [x] Provider can submit ID + credential + ≥5 photos; incomplete lists missing items (PRV-002)
+- [x] Admin queue oldest-first; interview then approve/reject with rationale (PRV-003, OPS-001)
+- [x] Opening an ID writes `document_access_log`; non-admin cannot (NFR-SEC-002)
+- [x] Approved provider sets bio, point, radius ≤ 15 km, 60-minute priced service; net shown (PRV-004)
+- [x] Weekly pattern + one blocked day; slots honor duration and travel buffer (AVL-001…003)
+- [x] Block that overlaps fixture occupancy is rejected with those ids (AVL-002)
+- [x] Schedule surface exists (AVL-004) even if bookings are fixtures
+- [x] Connect stub (or hosted link) gates go-live; missing prereqs named (PAY-005, PRV-005)
+- [x] Provider A cannot read/write provider B (NFR-SEC-008) — own-account routes only
+- [x] `/he` and `/en` provider/admin strings; M0/M1 smokes still pass
+- [x] CI 1–8 green on P5–P7; P3/P4 schema-race fixed by serializing migrate tests
+- [x] No booking rows; no public discovery
 
 Master demo: “Founder vets a provider; provider sets services + hours; go-live checklist visible.”
 
@@ -296,4 +308,4 @@ None changes the master cuts.
 
 ## 10. Next
 
-This plan is accepted. Implement `M2-P1`…`M2-P7` in order, CI green on each merge. After M2 exit, write [`m3-demand.md`](./m3-demand.md). Do not write M3–M5 plans during M2 implementation.
+M2 is complete. Write [`m3-demand.md`](./m3-demand.md). Do not write M4–M5 plans yet (master §6).
