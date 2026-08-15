@@ -6,8 +6,8 @@
 **Requirements:** CUS-002, CUS-003, CUS-004 (`P1`), PRV-001. NFRs below.  
 **Depends on:** M0 complete  
 **Unlocks:** M2–M5 authenticated work  
-**Status:** Accepted (auto-approved after M0 cadence)  
-**Implementation:** not started — this file is the go-ahead for `m1/*` only
+**Status:** Complete  
+**Implementation:** shipped on `main` 2026-08-15 (merge of [#21](https://github.com/natank/shearly/pull/21))
 
 ---
 
@@ -72,6 +72,17 @@ M1-P6 E2E both locales + SEC-008
 ```
 
 Nothing is parallel. Each PR must leave CI green (including the M0 locale smoke).
+
+### Delivery (as shipped)
+
+| Plan ID | PR | Title | Merged |
+|---|---|---|---|
+| M1-P1 | [#16](https://github.com/natank/shearly/pull/16) | Identity schema and migrate runner | 2026-08-15 |
+| M1-P2 | [#17](https://github.com/natank/shearly/pull/17) | Register, sign-in, and sign-out | 2026-08-15 |
+| M1-P3 | [#18](https://github.com/natank/shearly/pull/18) | Password reset via SMTP | 2026-08-15 |
+| M1-P4 | [#19](https://github.com/natank/shearly/pull/19) | Signed guest-draft cookie | 2026-08-15 |
+| M1-P5 | [#20](https://github.com/natank/shearly/pull/20) | Account UI and role landing | 2026-08-15 |
+| M1-P6 | [#21](https://github.com/natank/shearly/pull/21) | Auth E2E and SEC-008 | 2026-08-15 |
 
 ### M1-P1 — Identity schema and migrate
 
@@ -220,19 +231,19 @@ pnpm nx run-many -t serve -p web,api,admin
 
 ## 6. Exit checklist
 
-- [ ] Customer account can be created, signed in, signed out (CUS-002/003)
-- [ ] Provider account on a **second** email lands on the provider surface (PRV-001)
-- [ ] An account cannot hold both roles
-- [ ] Password reset invalidates every session (CUS-004)
-- [ ] Failed sign-in / reset-request JSON does not reveal whether the email exists (NFR-SEC-004)
-- [ ] Auth endpoints rate-limit (NFR-SEC-003)
-- [ ] Session cookie is HttpOnly + SameSite=Lax; Secure in production (NFR-SEC-007)
-- [ ] `GET /me` is the caller only (NFR-SEC-008)
-- [ ] Locale stored on the account from the UI locale (NFR-I18N-004)
-- [ ] Guest-draft cookie can be written and read back; booking does not consume it
-- [ ] `/he` and `/en` auth flows work; M0 smoke still passes
-- [ ] CI 1–8 green on every M1 PR; no `type:app-web` → `type:service` import
-- [ ] No identity tables outside schema `identity`; no JWT
+- [x] Customer account can be created, signed in, signed out (CUS-002/003)
+- [x] Provider account on a **second** email lands on the provider surface (PRV-001)
+- [x] An account cannot hold both roles
+- [x] Password reset invalidates every session (CUS-004)
+- [x] Failed sign-in / reset-request JSON does not reveal whether the email exists (NFR-SEC-004)
+- [x] Auth endpoints rate-limit (NFR-SEC-003)
+- [x] Session cookie is HttpOnly + SameSite=Lax; Secure in production (NFR-SEC-007)
+- [x] `GET /me` is the caller only (NFR-SEC-008)
+- [x] Locale stored on the account from the UI locale (NFR-I18N-004)
+- [x] Guest-draft cookie can be written and read back; booking does not consume it
+- [x] `/he` and `/en` auth flows work; M0 smoke still passes
+- [x] CI 1–8 green on every M1 PR; no `type:app-web` → `type:service` import
+- [x] No identity tables outside schema `identity`; no JWT
 
 Master demo: “Register, sign in/out, reset; customer vs provider land on different surfaces.”
 
@@ -279,4 +290,4 @@ None changes the master cuts.
 
 ## 10. Next
 
-This plan is accepted. Implement `M1-P1`…`M1-P6` in order, CI green on each merge. After M1 exit, write [`m2-supply.md`](./m2-supply.md). Do not write M2–M5 plans during M1 implementation.
+M1 is complete. Write [`m2-supply.md`](./m2-supply.md). Do not write M3–M5 plans yet (master §6).
