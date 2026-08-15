@@ -8,5 +8,10 @@
     "lat": 31.7683,
     "lng": 35.2137,
     "label": "Jerusalem"
+  },
+  "eilat": {
+    "lat": 29.5577,
+    "lng": 34.9519,
+    "label": "Eilat"
   }
 }
