@@ -1,6 +1,7 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { SignOutButton } from '@shearly/feature-account';
+import { AddressBook } from '@shearly/feature-discovery';
 import { getSession } from '../../../src/auth/session';
 
 export default async function AccountPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -18,6 +19,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     <main className="flex flex-col gap-4 p-4">
       <h1>{t('customerHome')}</h1>
       <p>{account.email}</p>
+      <AddressBook />
       <SignOutButton />
     </main>
   );
