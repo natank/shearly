@@ -9,10 +9,27 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+type Profile = {
+  bio: string;
+  baseLat: number | null;
+  baseLng: number | null;
+  radiusKm: number | null;
+};
+type Service = { id: string; name: string; duration_minutes: number; price_minor: number };
+type Weekly = { weekday: number; startMinute: number; endMinute: number };
+
 export function ProviderDashboard() {
   const t = useTranslations('provider');
   const [status, setStatus] = useState('');
   const [missing, setMissing] = useState<string[]>([]);
+  const [profile, setProfile] = useState<Profile>({
+    bio: '',
+    baseLat: null,
+    baseLng: null,
+    radiusKm: null,
+  });
+  const [services, setServices] = useState<Service[]>([]);
+  const [weekly, setWeekly] = useState<Weekly[]>([]);
   const [goLive, setGoLive] = useState<{
     ready: boolean;
     missing: string[];
@@ -21,9 +38,20 @@ export function ProviderDashboard() {
   const [net, setNet] = useState<number | null>(null);
 
   async function refresh() {
-    const app = await json<{ status: string; missing: string[] }>('/api/catalog/me/application');
+    const app = await json<{
+      status: string;
+      missing: string[];
+      profile?: Profile;
+    }>('/api/catalog/me/application');
     setStatus(app.status);
     setMissing(app.missing);
+    if (app.profile) {
+      setProfile(app.profile);
+    }
+    const listed = await json<{ services: Service[] }>('/api/catalog/me/services');
+    setServices(listed.services);
+    const schedule = await json<{ weekly: Weekly[] }>('/api/availability/me/schedule');
+    setWeekly(schedule.weekly);
     setGoLive(await json('/api/catalog/me/go-live'));
   }
 
@@ -141,15 +169,63 @@ export function ProviderDashboard() {
       <section className="flex flex-col gap-2">
         <h2>{t('profile')}</h2>
         <form onSubmit={onProfile} className="flex flex-col gap-2">
-          <Input name="bio" placeholder={t('bio')} />
-          <Input name="lat" placeholder={t('latitude')} />
-          <Input name="lng" placeholder={t('longitude')} />
-          <Input name="radius" placeholder={t('radius')} />
+          <Input
+            name="bio"
+            placeholder={t('bio')}
+            value={profile.bio}
+            onChange={(event) => setProfile({ ...profile, bio: event.target.value })}
+          />
+          <Input
+            name="lat"
+            placeholder={t('latitude')}
+            value={profile.baseLat ?? ''}
+            onChange={(event) =>
+              setProfile({
+                ...profile,
+                baseLat: event.target.value === '' ? null : Number(event.target.value),
+              })
+            }
+          />
+          <Input
+            name="lng"
+            placeholder={t('longitude')}
+            value={profile.baseLng ?? ''}
+            onChange={(event) =>
+              setProfile({
+                ...profile,
+                baseLng: event.target.value === '' ? null : Number(event.target.value),
+              })
+            }
+          />
+          <Input
+            name="radius"
+            placeholder={t('radius')}
+            value={profile.radiusKm ?? ''}
+            onChange={(event) =>
+              setProfile({
+                ...profile,
+                radiusKm: event.target.value === '' ? null : Number(event.target.value),
+              })
+            }
+          />
           <Button type="submit">{t('saveProfile')}</Button>
         </form>
       </section>
       <section className="flex flex-col gap-2">
         <h2>{t('services')}</h2>
+        {services.length ? (
+          <ul className="flex flex-col gap-1 text-sm">
+            {services.map((service) => (
+              <li key={service.id}>
+                {service.name}
+                {' · '}
+                {service.duration_minutes}
+                {' · '}
+                {service.price_minor / 100}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {net !== null ? (
           <p>
             {t('net')}
@@ -166,6 +242,19 @@ export function ProviderDashboard() {
       </section>
       <section className="flex flex-col gap-2">
         <h2>{t('availability')}</h2>
+        {weekly.length ? (
+          <ul className="flex flex-col gap-1 text-sm">
+            {weekly.map((rule) => (
+              <li key={`${rule.weekday}-${rule.startMinute}`}>
+                {rule.weekday}
+                {' · '}
+                {rule.startMinute}
+                {'–'}
+                {rule.endMinute}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <form onSubmit={onWeekly} className="flex flex-col gap-2">
           <Input name="weekday" placeholder={t('weekday')} defaultValue="1" />
           <Input name="start" placeholder={t('startMinute')} defaultValue="540" />
