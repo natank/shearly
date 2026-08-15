@@ -23,6 +23,7 @@ export const envSchema = z.object({
   GUEST_DRAFT_COOKIE_NAME: z.string().min(1).default('shearly_guest_draft'),
   ADMIN_SEED_EMAIL: z.string().email().default('admin@shearly.local'),
   ADMIN_SEED_PASSWORD: z.string().min(10).default('change-me-admin-10'),
+  DOCUMENT_STORE_DIR: z.string().min(1).default('var/private-docs'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -50,6 +51,7 @@ export type AppConfig = {
   guestDraftCookieName: string;
   adminSeedEmail: string;
   adminSeedPassword: string;
+  documentStoreDir: string;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -76,5 +78,6 @@ export function toAppConfig(env: Env): AppConfig {
     guestDraftCookieName: env.GUEST_DRAFT_COOKIE_NAME,
     adminSeedEmail: env.ADMIN_SEED_EMAIL,
     adminSeedPassword: env.ADMIN_SEED_PASSWORD,
+    documentStoreDir: env.DOCUMENT_STORE_DIR,
   };
 }
