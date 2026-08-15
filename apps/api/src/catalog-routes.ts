@@ -21,11 +21,18 @@ export function createCatalogRoutes(
   routes.get('/catalog/me/application', async (c) => {
     const account = await requireProvider(c, identity, config);
     const application = await catalog.application(account.id);
+    const { provider } = application;
     return c.json({
-      status: application.provider.status,
-      listed: application.provider.listed,
+      status: provider.status,
+      listed: provider.listed,
       missing: application.missing,
       documents: application.documents,
+      profile: {
+        bio: provider.bio ?? '',
+        baseLat: provider.base_lat,
+        baseLng: provider.base_lng,
+        radiusKm: provider.radius_km,
+      },
     });
   });
 

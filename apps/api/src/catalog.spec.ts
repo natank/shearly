@@ -69,4 +69,30 @@ describe('catalog HTTP', () => {
     const queue = await app.request('/admin/vetting', { headers: { cookie: cookie(customer) } });
     expect(queue.status).toBe(403);
   });
+
+  it('returns saved profile fields after PATCH', async () => {
+    if (!app) {
+      return;
+    }
+    const session = await registerProvider(app, `prof-${crypto.randomUUID()}@example.com`);
+    const saved = await app.request('/catalog/me/profile', {
+      method: 'PATCH',
+      headers: { cookie: session, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        bio: 'Tel Aviv cuts',
+        baseLat: 32.08,
+        baseLng: 34.78,
+        radiusKm: 10,
+      }),
+    });
+    expect(saved.status).toBe(200);
+    const again = await app.request('/catalog/me/application', { headers: { cookie: session } });
+    const body = (await again.json()) as {
+      profile: { bio: string; baseLat: number; baseLng: number; radiusKm: number };
+    };
+    expect(body.profile.bio).toBe('Tel Aviv cuts');
+    expect(body.profile.baseLat).toBeCloseTo(32.08);
+    expect(body.profile.baseLng).toBeCloseTo(34.78);
+    expect(body.profile.radiusKm).toBe(10);
+  });
 });
