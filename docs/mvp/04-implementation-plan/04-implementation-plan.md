@@ -20,6 +20,7 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 | **M3** | [m3-demand.md](./m3-demand.md) | Demand | Complete |
 | **M4** | `m4-transaction.md` | Transaction | Not written |
 | **M5** | `m5-operate-and-bar.md` | Operate & bar | Not written |
+| **QC** | [QC/](../QC/README.md) | Manual STD per shipped milestone | M0–M3 written |
 
 ### Implementation progress
 

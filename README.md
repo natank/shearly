@@ -59,3 +59,4 @@ ECR push is skipped unless these GitHub Actions secrets exist: `AWS_ACCESS_KEY_I
 | Requirements | `docs/mvp/02-requirements.md`      |
 | Design       | `docs/mvp/03-design.md`            |
 | Plan         | `docs/mvp/04-implementation-plan/` |
+| Manual QC    | `docs/mvp/QC/`                     |
