@@ -9,7 +9,8 @@ test('hebrew customer register lands on the customer surface', async ({ page }) 
   await expect(page).toHaveURL(/\/he\/account/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('החשבון שלך');
   await page.getByRole('button', { name: 'התנתקות' }).click();
-  await page.goto('/he/sign-in');
+  await expect(page).toHaveURL(/\/he\/?$/);
+  await page.getByRole('link', { name: 'התחברות' }).click();
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill('long-enough-password');
   await page.getByRole('button', { name: 'התחברות' }).click();
