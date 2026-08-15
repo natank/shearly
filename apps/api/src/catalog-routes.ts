@@ -168,6 +168,104 @@ export function createCatalogRoutes(
     return c.json(await extras.payments.getStatus(account.id));
   });
 
+  routes.get('/catalog/public/:providerId', async (c) => {
+    const provider = await catalog.requirePublic(c.req.param('providerId'));
+    const application = await catalog.application(provider.account_id);
+    const services = await catalog.listServicesForProvider(provider.id);
+    const reviews = await catalog.listReviews(provider.id);
+    const photos = await catalog.listPortfolioMeta(provider.id);
+    const average = provider.rating_count > 0 ? provider.rating_sum / provider.rating_count : null;
+    let nextSlots: { start: string; end: string }[] = [];
+    if (extras && services[0]) {
+      const now = new Date();
+      const slots = await extras.availability.slots(provider.account_id, {
+        durationMinutes: services[0].duration_minutes,
+        from: now,
+        to: new Date(now.getTime() + extras.availability.discoveryDays() * 86_400_000),
+        now,
+      });
+      nextSlots = slots.slice(0, 8).map((slot) => ({
+        start: slot.start.toISOString(),
+        end: slot.end.toISOString(),
+      }));
+    }
+    return c.json({
+      provider: {
+        id: provider.id,
+        displayName: provider.display_name ?? '',
+        bio: provider.bio ?? '',
+        radiusKm: provider.radius_km,
+        listed: provider.listed,
+        status: provider.status,
+      },
+      vetting: {
+        governmentId: application.documents.some((doc) => doc.kind === 'government_id'),
+        credential: application.documents.some((doc) => doc.kind === 'credential'),
+        portfolio: application.documents.filter((doc) => doc.kind === 'portfolio').length >= 5,
+        interview: provider.status === 'approved',
+      },
+      services: services.map((service) => ({
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        durationMinutes: service.duration_minutes,
+        priceMinor: service.price_minor,
+        travelIncluded: true,
+      })),
+      rating: {
+        average,
+        count: provider.rating_count,
+        newProvider: provider.rating_count < config.newProviderReviewThreshold,
+      },
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        rating: review.rating,
+        body: review.body,
+        createdAt: review.created_at,
+      })),
+      portfolio: photos.map((photo) => ({
+        id: photo.id,
+        url: `/api/catalog/public/${provider.id}/portfolio/${photo.id}`,
+      })),
+      nextSlots,
+    });
+  });
+
+  routes.get('/catalog/public/:providerId/services/:serviceId/slots', async (c) => {
+    const provider = await catalog.requirePublic(c.req.param('providerId'));
+    const services = await catalog.listServicesForProvider(provider.id);
+    const service = services.find((row) => row.id === c.req.param('serviceId'));
+    if (!service || !extras) {
+      return c.json({ error: 'NOT_FOUND', translationKey: 'catalog.serviceNotFound' }, 404);
+    }
+    const from = c.req.query('from') ? new Date(String(c.req.query('from'))) : new Date();
+    const to = c.req.query('to')
+      ? new Date(String(c.req.query('to')))
+      : new Date(from.getTime() + extras.availability.discoveryDays() * 86_400_000);
+    const slots = await extras.availability.slots(provider.account_id, {
+      durationMinutes: service.duration_minutes,
+      from,
+      to,
+      now: new Date(),
+    });
+    return c.json({
+      slots: slots.map((slot) => ({
+        start: slot.start.toISOString(),
+        end: slot.end.toISOString(),
+      })),
+    });
+  });
+
+  routes.get('/catalog/public/:providerId/portfolio/:docId', async (c) => {
+    const file = await catalog.readPublicPortfolio(c.req.param('providerId'), c.req.param('docId'));
+    return new Response(file.bytes, {
+      headers: {
+        'content-type': file.contentType,
+        'content-disposition': `inline; filename="${file.originalName}"`,
+      },
+    });
+  });
+
   routes.get('/admin/vetting', async (c) => {
     await requireAdmin(c, identity, config);
     return c.json({ queue: await catalog.listQueue() });

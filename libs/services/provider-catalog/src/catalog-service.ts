@@ -83,6 +83,81 @@ export class CatalogService {
     return result.rows[0] ?? null;
   }
 
+  async requirePublic(providerId: string): Promise<ProviderRow> {
+    const provider = await this.getById(providerId);
+    if (!provider || !provider.listed || provider.status !== 'approved') {
+      throw new NotFoundError('catalog.providerNotFound');
+    }
+    return provider;
+  }
+
+  async addReview(
+    providerId: string,
+    input: { rating: number; body?: string },
+  ): Promise<{ id: string; rating: number; body: string | null; created_at: Date }> {
+    if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
+      throw new ValidationError('errors.validation');
+    }
+    await this.requirePublic(providerId);
+    const inserted = await this.pool.query<{
+      id: string;
+      rating: number;
+      body: string | null;
+      created_at: Date;
+    }>(
+      `INSERT INTO catalog.reviews (provider_id, rating, body)
+       VALUES ($1, $2, $3)
+       RETURNING id, rating, body, created_at`,
+      [providerId, input.rating, input.body ?? null],
+    );
+    await this.pool.query(
+      `UPDATE catalog.providers SET
+         rating_sum = rating_sum + $2,
+         rating_count = rating_count + 1,
+         updated_at = now()
+       WHERE id = $1`,
+      [providerId, input.rating],
+    );
+    return inserted.rows[0];
+  }
+
+  async listReviews(providerId: string) {
+    await this.requirePublic(providerId);
+    const result = await this.pool.query<{
+      id: string;
+      rating: number;
+      body: string | null;
+      created_at: Date;
+    }>(
+      `SELECT id, rating, body, created_at FROM catalog.reviews
+       WHERE provider_id = $1 ORDER BY created_at DESC`,
+      [providerId],
+    );
+    return result.rows;
+  }
+
+  async readPublicPortfolio(providerId: string, documentId: string) {
+    await this.requirePublic(providerId);
+    const doc = await this.pool.query<{
+      id: string;
+      kind: DocKind;
+      original_name: string;
+      content_type: string;
+      storage_key: string;
+    }>(
+      `SELECT id, kind, original_name, content_type, storage_key
+       FROM catalog.vetting_documents
+       WHERE id = $1 AND provider_id = $2 AND kind = 'portfolio'`,
+      [documentId, providerId],
+    );
+    const row = doc.rows[0];
+    if (!row) {
+      throw new NotFoundError('catalog.documentNotFound');
+    }
+    const bytes = await this.store.get(row.storage_key);
+    return { bytes, contentType: row.content_type, originalName: row.original_name };
+  }
+
   async addDocument(
     accountId: string,
     input: { kind: DocKind; originalName: string; contentType: string; bytes: Buffer },
