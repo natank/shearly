@@ -12,7 +12,7 @@ export function LocaleSwitcher() {
   const label = nextLocale === 'he' ? t('switchToHebrew') : t('switchToEnglish');
 
   return (
-    <Button asChild variant="outline" size="sm">
+    <Button asChild variant="outline" size="sm" className="self-start">
       <Link href={pathname} locale={nextLocale}>
         {label}
       </Link>

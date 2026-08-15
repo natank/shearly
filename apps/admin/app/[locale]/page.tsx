@@ -11,8 +11,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const vettingT = await getTranslations('vetting');
   const account = await getSession();
   return (
-    <main className="flex flex-col gap-3 p-4">
-      <h1>{t('adminAppName')}</h1>
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-3 p-4">
+      <h1 className="text-xl font-medium">{t('adminAppName')}</h1>
       <LocaleSwitcher />
       {account?.role === 'admin' ? (
         <>

@@ -12,8 +12,8 @@ export default async function VettingPage({ params }: { params: Promise<{ locale
   }
   const t = await getTranslations('vetting');
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <h1>{t('queue')}</h1>
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-4 p-4">
+      <h1 className="text-xl font-medium">{t('queue')}</h1>
       <VettingQueue />
     </main>
   );
