@@ -1,6 +1,7 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { SignOutButton } from '@shearly/feature-account';
+import { ProviderDashboard } from '@shearly/feature-provider';
 import { getSession } from '../../../src/auth/session';
 
 export default async function ProviderPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -19,6 +20,7 @@ export default async function ProviderPage({ params }: { params: Promise<{ local
       <h1>{t('providerHome')}</h1>
       <p>{account.email}</p>
       <p>{t('providerDraft')}</p>
+      <ProviderDashboard />
       <SignOutButton />
     </main>
   );

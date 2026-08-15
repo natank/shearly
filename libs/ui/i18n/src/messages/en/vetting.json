@@ -1,0 +1,8 @@
+{
+  "queue": "Vetting queue",
+  "empty": "No applications waiting.",
+  "interview": "Schedule interview",
+  "approve": "Approve",
+  "reject": "Reject",
+  "openDoc": "Open document"
+}
