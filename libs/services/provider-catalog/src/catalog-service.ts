@@ -262,10 +262,23 @@ export class CatalogService {
 
   async listServices(accountId: string): Promise<ServiceRow[]> {
     const provider = await this.requireOwn(accountId);
+    return this.listServicesForProvider(provider.id);
+  }
+
+  async listServicesForProvider(providerId: string): Promise<ServiceRow[]> {
     const result = await this.pool.query<ServiceRow>(
       `SELECT id, provider_id, name, description, duration_minutes, price_minor
        FROM catalog.services WHERE provider_id = $1 ORDER BY created_at ASC`,
-      [provider.id],
+      [providerId],
+    );
+    return result.rows;
+  }
+
+  async listPortfolioMeta(providerId: string): Promise<DocumentMeta[]> {
+    const result = await this.pool.query<DocumentMeta>(
+      `SELECT id, kind, original_name, content_type FROM catalog.vetting_documents
+       WHERE provider_id = $1 AND kind = 'portfolio' ORDER BY created_at ASC`,
+      [providerId],
     );
     return result.rows;
   }

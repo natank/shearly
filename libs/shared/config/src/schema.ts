@@ -24,6 +24,14 @@ export const envSchema = z.object({
   ADMIN_SEED_EMAIL: z.string().email().default('admin@shearly.local'),
   ADMIN_SEED_PASSWORD: z.string().min(10).default('change-me-admin-10'),
   DOCUMENT_STORE_DIR: z.string().min(1).default('var/private-docs'),
+  RANK_WEIGHT_DISTANCE: z.coerce.number().min(0).default(0.4),
+  RANK_WEIGHT_AVAILABILITY: z.coerce.number().min(0).default(0.3),
+  RANK_WEIGHT_RATING: z.coerce.number().min(0).default(0.2),
+  RANK_WEIGHT_COMPLETIONS: z.coerce.number().min(0).default(0.1),
+  NEW_PROVIDER_REVIEW_THRESHOLD: z.coerce.number().int().positive().default(3),
+  RANKING_IMPL: z.enum(['deterministic', 'stub']).default('deterministic'),
+  RANKING_TIMEOUT_MS: z.coerce.number().int().positive().default(200),
+  DISCOVERY_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -52,6 +60,14 @@ export type AppConfig = {
   adminSeedEmail: string;
   adminSeedPassword: string;
   documentStoreDir: string;
+  rankWeightDistance: number;
+  rankWeightAvailability: number;
+  rankWeightRating: number;
+  rankWeightCompletions: number;
+  newProviderReviewThreshold: number;
+  rankingImpl: 'deterministic' | 'stub';
+  rankingTimeoutMs: number;
+  discoveryWindowDays: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -79,5 +95,13 @@ export function toAppConfig(env: Env): AppConfig {
     adminSeedEmail: env.ADMIN_SEED_EMAIL,
     adminSeedPassword: env.ADMIN_SEED_PASSWORD,
     documentStoreDir: env.DOCUMENT_STORE_DIR,
+    rankWeightDistance: env.RANK_WEIGHT_DISTANCE,
+    rankWeightAvailability: env.RANK_WEIGHT_AVAILABILITY,
+    rankWeightRating: env.RANK_WEIGHT_RATING,
+    rankWeightCompletions: env.RANK_WEIGHT_COMPLETIONS,
+    newProviderReviewThreshold: env.NEW_PROVIDER_REVIEW_THRESHOLD,
+    rankingImpl: env.RANKING_IMPL,
+    rankingTimeoutMs: env.RANKING_TIMEOUT_MS,
+    discoveryWindowDays: env.DISCOVERY_WINDOW_DAYS,
   };
 }

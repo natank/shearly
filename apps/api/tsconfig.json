@@ -25,6 +25,9 @@
       "path": "../../libs/services/payments"
     },
     {
+      "path": "../../libs/domain/ranking"
+    },
+    {
       "path": "../../libs/shared/config"
     },
     {

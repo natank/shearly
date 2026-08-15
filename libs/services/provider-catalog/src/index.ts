@@ -6,6 +6,7 @@ export type {
   ListedProvider,
   ProviderRow,
   ProviderStatus,
+  ServiceRow,
 } from './catalog-service.js';
 export { FsDocumentStore } from './document-store.js';
 export type { DocumentStore } from './document-store.js';
