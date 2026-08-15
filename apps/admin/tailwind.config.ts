@@ -8,6 +8,8 @@ const config: Config = {
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
     '../../libs/ui/design-system/src/**/*.{ts,tsx}',
+    '../../libs/ui/feature-account/src/**/*.{ts,tsx}',
+    '../../libs/ui/feature-provider/src/**/*.{ts,tsx}',
   ],
 };
 

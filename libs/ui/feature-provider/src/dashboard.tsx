@@ -1,12 +1,41 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button, Input } from '@shearly/ui-design-system';
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...init });
   return (await res.json()) as T;
+}
+
+function minutesFromTime(value: string): number {
+  const [hours, minutes] = value.split(':').map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+function timeFromMinutes(total: number): string {
+  const hours = String(Math.floor(total / 60)).padStart(2, '0');
+  const minutes = String(total % 60).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-md border border-input bg-background p-4">
+      <h2 className="text-base font-medium">{title}</h2>
+      {children}
+    </section>
+  );
 }
 
 type Profile = {
@@ -63,7 +92,7 @@ export function ProviderDashboard() {
     event.preventDefault();
     const form = event.currentTarget;
     const files = form.elements.namedItem('files') as HTMLInputElement;
-    const kind = (form.elements.namedItem('kind') as HTMLInputElement).value;
+    const kind = (form.elements.namedItem('kind') as HTMLSelectElement).value;
     const chosen = files.files;
     if (!chosen) {
       return;
@@ -80,15 +109,14 @@ export function ProviderDashboard() {
 
   async function onProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
     await json('/api/catalog/me/profile', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        bio: String(form.get('bio') ?? ''),
-        baseLat: Number(form.get('lat')),
-        baseLng: Number(form.get('lng')),
-        radiusKm: Number(form.get('radius')),
+        bio: profile.bio,
+        baseLat: profile.baseLat,
+        baseLng: profile.baseLng,
+        radiusKm: profile.radiusKm,
       }),
     });
     await refresh();
@@ -97,6 +125,7 @@ export function ProviderDashboard() {
   async function onService(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const shekels = Number(form.get('price'));
     const result = await json<{ quote: { net: number } }>('/api/catalog/me/services', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -104,10 +133,10 @@ export function ProviderDashboard() {
         name: String(form.get('name') ?? ''),
         description: '',
         durationMinutes: Number(form.get('duration')),
-        priceMinor: Number(form.get('price')),
+        priceMinor: Math.round(shekels * 100),
       }),
     });
-    setNet(result.quote.net);
+    setNet(result.quote.net / 100);
     await refresh();
   }
 
@@ -121,8 +150,8 @@ export function ProviderDashboard() {
         rules: [
           {
             weekday: Number(form.get('weekday')),
-            startMinute: Number(form.get('start')),
-            endMinute: Number(form.get('end')),
+            startMinute: minutesFromTime(String(form.get('start') ?? '09:00')),
+            endMinute: minutesFromTime(String(form.get('end') ?? '17:00')),
           },
         ],
       }),
@@ -140,79 +169,89 @@ export function ProviderDashboard() {
     });
   }
 
+  const selectClass = 'flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm';
+  const dayKey = ['day0', 'day1', 'day2', 'day3', 'day4', 'day5', 'day6'] as const;
+
   return (
-    <div className="flex max-w-xl flex-col gap-6">
-      <section className="flex flex-col gap-2">
-        <h2>{t('application')}</h2>
-        <p>
+    <div className="flex w-full max-w-xl flex-col gap-6">
+      <Section title={t('application')}>
+        <p className="text-sm">
           {t('status')}
           {': '}
           {status}
         </p>
         {missing.length ? (
-          <p>
+          <p className="text-sm">
             {t('missing')}
             {': '}
             {missing.join(', ')}
           </p>
         ) : null}
-        <form onSubmit={onSubmitApp} className="flex flex-col gap-2">
-          <select name="kind" className="h-10 rounded-md border border-input bg-background px-3">
-            <option value="government_id">{'government_id'}</option>
-            <option value="credential">{'credential'}</option>
-            <option value="portfolio">{'portfolio'}</option>
-          </select>
-          <Input name="files" type="file" multiple />
+        <form onSubmit={onSubmitApp} className="flex flex-col gap-3">
+          <Field label={t('docKind')}>
+            <select name="kind" className={selectClass}>
+              <option value="government_id">{t('kindId')}</option>
+              <option value="credential">{t('kindCredential')}</option>
+              <option value="portfolio">{t('kindPortfolio')}</option>
+            </select>
+          </Field>
+          <Field label={t('files')}>
+            <Input name="files" type="file" multiple />
+          </Field>
           <Button type="submit">{t('submit')}</Button>
         </form>
-      </section>
-      <section className="flex flex-col gap-2">
-        <h2>{t('profile')}</h2>
-        <form onSubmit={onProfile} className="flex flex-col gap-2">
-          <Input
-            name="bio"
-            placeholder={t('bio')}
-            value={profile.bio}
-            onChange={(event) => setProfile({ ...profile, bio: event.target.value })}
-          />
-          <Input
-            name="lat"
-            placeholder={t('latitude')}
-            value={profile.baseLat ?? ''}
-            onChange={(event) =>
-              setProfile({
-                ...profile,
-                baseLat: event.target.value === '' ? null : Number(event.target.value),
-              })
-            }
-          />
-          <Input
-            name="lng"
-            placeholder={t('longitude')}
-            value={profile.baseLng ?? ''}
-            onChange={(event) =>
-              setProfile({
-                ...profile,
-                baseLng: event.target.value === '' ? null : Number(event.target.value),
-              })
-            }
-          />
-          <Input
-            name="radius"
-            placeholder={t('radius')}
-            value={profile.radiusKm ?? ''}
-            onChange={(event) =>
-              setProfile({
-                ...profile,
-                radiusKm: event.target.value === '' ? null : Number(event.target.value),
-              })
-            }
-          />
+      </Section>
+
+      <Section title={t('profile')}>
+        <form onSubmit={onProfile} className="flex flex-col gap-3">
+          <Field label={t('bio')}>
+            <Input
+              name="bio"
+              value={profile.bio}
+              onChange={(event) => setProfile({ ...profile, bio: event.target.value })}
+            />
+          </Field>
+          <Field label={t('latitude')}>
+            <Input
+              name="lat"
+              value={profile.baseLat ?? ''}
+              onChange={(event) =>
+                setProfile({
+                  ...profile,
+                  baseLat: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
+            />
+          </Field>
+          <Field label={t('longitude')}>
+            <Input
+              name="lng"
+              value={profile.baseLng ?? ''}
+              onChange={(event) =>
+                setProfile({
+                  ...profile,
+                  baseLng: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
+            />
+          </Field>
+          <Field label={t('radius')}>
+            <Input
+              name="radius"
+              value={profile.radiusKm ?? ''}
+              onChange={(event) =>
+                setProfile({
+                  ...profile,
+                  radiusKm: event.target.value === '' ? null : Number(event.target.value),
+                })
+              }
+            />
+          </Field>
           <Button type="submit">{t('saveProfile')}</Button>
         </form>
-      </section>
-      <section className="flex flex-col gap-2">
-        <h2>{t('services')}</h2>
+      </Section>
+
+      <Section title={t('services')}>
         {services.length ? (
           <ul className="flex flex-col gap-1 text-sm">
             {services.map((service) => (
@@ -227,50 +266,74 @@ export function ProviderDashboard() {
           </ul>
         ) : null}
         {net !== null ? (
-          <p>
+          <p className="text-sm">
             {t('net')}
             {': '}
             {net}
           </p>
         ) : null}
-        <form onSubmit={onService} className="flex flex-col gap-2">
-          <Input name="name" placeholder={t('serviceName')} />
-          <Input name="duration" placeholder={t('duration')} defaultValue="60" />
-          <Input name="price" placeholder={t('price')} defaultValue="20000" />
+        <form onSubmit={onService} className="flex flex-col gap-3">
+          <Field label={t('serviceName')}>
+            <Input name="name" />
+          </Field>
+          <Field label={t('duration')}>
+            <Input name="duration" defaultValue="60" />
+          </Field>
+          <Field label={t('price')}>
+            <Input name="price" defaultValue="200" />
+          </Field>
           <Button type="submit">{t('addService')}</Button>
         </form>
-      </section>
-      <section className="flex flex-col gap-2">
-        <h2>{t('availability')}</h2>
+      </Section>
+
+      <Section title={t('availability')}>
         {weekly.length ? (
           <ul className="flex flex-col gap-1 text-sm">
             {weekly.map((rule) => (
               <li key={`${rule.weekday}-${rule.startMinute}`}>
-                {rule.weekday}
+                {t(dayKey[rule.weekday] ?? 'day0')}
                 {' · '}
-                {rule.startMinute}
+                {timeFromMinutes(rule.startMinute)}
                 {'–'}
-                {rule.endMinute}
+                {timeFromMinutes(rule.endMinute)}
               </li>
             ))}
           </ul>
         ) : null}
-        <form onSubmit={onWeekly} className="flex flex-col gap-2">
-          <Input name="weekday" placeholder={t('weekday')} defaultValue="1" />
-          <Input name="start" placeholder={t('startMinute')} defaultValue="540" />
-          <Input name="end" placeholder={t('endMinute')} defaultValue="1020" />
+        <form onSubmit={onWeekly} className="flex flex-col gap-3">
+          <Field label={t('weekday')}>
+            <select name="weekday" className={selectClass} defaultValue="1">
+              <option value="0">{t('day0')}</option>
+              <option value="1">{t('day1')}</option>
+              <option value="2">{t('day2')}</option>
+              <option value="3">{t('day3')}</option>
+              <option value="4">{t('day4')}</option>
+              <option value="5">{t('day5')}</option>
+              <option value="6">{t('day6')}</option>
+            </select>
+          </Field>
+          <Field label={t('startTime')}>
+            <Input name="start" type="time" defaultValue="09:00" />
+          </Field>
+          <Field label={t('endTime')}>
+            <Input name="end" type="time" defaultValue="17:00" />
+          </Field>
           <Button type="submit">{t('saveWeekly')}</Button>
         </form>
-        <form onSubmit={onBlock} className="flex flex-col gap-2">
-          <Input name="date" placeholder={t('blockDate')} />
-          <Button type="submit">{t('block')}</Button>
+        <form onSubmit={onBlock} className="flex flex-col gap-3">
+          <Field label={t('blockDate')}>
+            <Input name="date" type="date" />
+          </Field>
+          <Button type="submit" variant="outline">
+            {t('block')}
+          </Button>
         </form>
-      </section>
-      <section className="flex flex-col gap-2">
-        <h2>{t('goLive')}</h2>
-        <p>{goLive?.ready ? t('ready') : t('notReady')}</p>
+      </Section>
+
+      <Section title={t('goLive')}>
+        <p className="text-sm">{goLive?.ready ? t('ready') : t('notReady')}</p>
         {goLive?.missing?.length ? (
-          <p>
+          <p className="text-sm">
             {t('missing')}
             {': '}
             {goLive.missing.join(', ')}
@@ -278,6 +341,7 @@ export function ProviderDashboard() {
         ) : null}
         <Button
           type="button"
+          variant="outline"
           onClick={async () => {
             await json('/api/payments/me/connect/stub-complete', { method: 'POST' });
             await refresh();
@@ -287,6 +351,7 @@ export function ProviderDashboard() {
         </Button>
         <Button
           type="button"
+          disabled={!goLive?.listed && !goLive?.ready}
           onClick={async () => {
             await json('/api/catalog/me/go-live', {
               method: 'POST',
@@ -298,7 +363,7 @@ export function ProviderDashboard() {
         >
           {goLive?.listed ? t('unlistMe') : t('listMe')}
         </Button>
-      </section>
+      </Section>
     </div>
   );
 }
