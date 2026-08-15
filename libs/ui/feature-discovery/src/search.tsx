@@ -76,7 +76,7 @@ export function DiscoverySearch() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
       <section className="flex flex-col gap-3 rounded-md border border-input bg-background p-4">
-        <h1 className="text-xl font-medium">{t('title')}</h1>
+        <h2 className="text-xl font-medium">{t('title')}</h2>
         <p className="text-sm">{t('prompt')}</p>
         <form onSubmit={onSearch} className="flex flex-col gap-3">
           <Field label={t('location')}>
