@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { AuthorizationError, NotFoundError, ValidationError } from '@shearly/shared-errors';
+import { splitPrice } from '@shearly/domain-pricing';
 import type { DocumentStore } from './document-store.js';
 
 export type ProviderStatus =
@@ -28,10 +29,21 @@ export type DocumentMeta = {
 
 const PROVIDER_COLS = `id, account_id, status, listed, bio, base_lat, base_lng, radius_km`;
 
+export type ServiceRow = {
+  id: string;
+  provider_id: string;
+  name: string;
+  description: string;
+  duration_minutes: number;
+  price_minor: number;
+};
+
 export class CatalogService {
   constructor(
     private readonly pool: pg.Pool,
     private readonly store: DocumentStore,
+    private readonly radiusCapKm = 15,
+    private readonly commissionRate = 0.2,
   ) {}
 
   async ensureDraft(accountId: string): Promise<ProviderRow> {
@@ -159,6 +171,87 @@ export class CatalogService {
     );
     const bytes = await this.store.get(row.storage_key);
     return { bytes, contentType: row.content_type, originalName: row.original_name };
+  }
+
+  async updateProfile(
+    accountId: string,
+    input: { bio?: string; baseLat?: number; baseLng?: number; radiusKm?: number },
+  ): Promise<ProviderRow> {
+    const provider = await this.requireOwn(accountId);
+    if (input.radiusKm !== undefined && input.radiusKm > this.radiusCapKm) {
+      throw new ValidationError('catalog.radiusCap');
+    }
+    const updated = await this.pool.query<ProviderRow>(
+      `UPDATE catalog.providers SET
+         bio = COALESCE($2, bio),
+         base_lat = COALESCE($3, base_lat),
+         base_lng = COALESCE($4, base_lng),
+         radius_km = COALESCE($5, radius_km),
+         updated_at = now()
+       WHERE id = $1
+       RETURNING ${PROVIDER_COLS}`,
+      [
+        provider.id,
+        input.bio ?? null,
+        input.baseLat ?? null,
+        input.baseLng ?? null,
+        input.radiusKm ?? null,
+      ],
+    );
+    return updated.rows[0];
+  }
+
+  async addService(
+    accountId: string,
+    input: { name: string; description: string; durationMinutes: number; priceMinor: number },
+  ): Promise<ServiceRow> {
+    const provider = await this.requireOwn(accountId);
+    if (input.durationMinutes <= 0 || input.priceMinor < 0 || !input.name.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    const inserted = await this.pool.query<ServiceRow>(
+      `INSERT INTO catalog.services (provider_id, name, description, duration_minutes, price_minor)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, provider_id, name, description, duration_minutes, price_minor`,
+      [provider.id, input.name.trim(), input.description, input.durationMinutes, input.priceMinor],
+    );
+    return inserted.rows[0];
+  }
+
+  async listServices(accountId: string): Promise<ServiceRow[]> {
+    const provider = await this.requireOwn(accountId);
+    const result = await this.pool.query<ServiceRow>(
+      `SELECT id, provider_id, name, description, duration_minutes, price_minor
+       FROM catalog.services WHERE provider_id = $1 ORDER BY created_at ASC`,
+      [provider.id],
+    );
+    return result.rows;
+  }
+
+  async quoteService(accountId: string, serviceId: string) {
+    const provider = await this.requireOwn(accountId);
+    const result = await this.pool.query<ServiceRow>(
+      `SELECT id, provider_id, name, description, duration_minutes, price_minor
+       FROM catalog.services WHERE id = $1 AND provider_id = $2`,
+      [serviceId, provider.id],
+    );
+    const service = result.rows[0];
+    if (!service) {
+      throw new NotFoundError('catalog.serviceNotFound');
+    }
+    return splitPrice(service.price_minor, this.commissionRate);
+  }
+
+  async serviceCount(accountId: string): Promise<number> {
+    const provider = await this.getByAccount(accountId);
+    if (!provider) {
+      return 0;
+    }
+    const result = await this.pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM catalog.services WHERE provider_id = $1`,
+      [provider.id],
+    );
+    return Number(result.rows[0]?.n ?? 0);
   }
 
   async accessLogCount(documentId: string): Promise<number> {

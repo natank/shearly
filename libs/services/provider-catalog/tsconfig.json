@@ -8,5 +8,5 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../shared/errors" }]
+  "references": [{ "path": "../../shared/errors" }, { "path": "../../domain/pricing" }]
 }

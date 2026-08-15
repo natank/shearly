@@ -87,4 +87,30 @@ describe('CatalogService vetting', () => {
     expect(file.bytes.toString()).toBe('id');
     expect(await catalog.accessLogCount(idDoc?.id ?? '')).toBe(1);
   });
+
+  it('caps radius and quotes net earnings', async () => {
+    if (!catalog) {
+      return;
+    }
+    const accountId = crypto.randomUUID();
+    await expect(catalog.updateProfile(accountId, { radiusKm: 16 })).rejects.toMatchObject({
+      translationKey: 'catalog.radiusCap',
+    });
+    await catalog.updateProfile(accountId, {
+      bio: 'cuts',
+      baseLat: 32.08,
+      baseLng: 34.78,
+      radiusKm: 10,
+    });
+    const service = await catalog.addService(accountId, {
+      name: 'Cut',
+      description: '60 min',
+      durationMinutes: 60,
+      priceMinor: 20000,
+    });
+    expect(await catalog.quoteService(accountId, service.id)).toMatchObject({
+      net: 16000,
+      travelIncluded: true,
+    });
+  });
 });

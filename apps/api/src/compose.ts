@@ -17,6 +17,11 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
     config,
     pool,
     identity: new IdentityService(pool, config, sendMail ?? createSmtpMailer(config.smtpUrl)),
-    catalog: new CatalogService(pool, new FsDocumentStore(config.documentStoreDir)),
+    catalog: new CatalogService(
+      pool,
+      new FsDocumentStore(config.documentStoreDir),
+      config.radiusCapKm,
+      config.commissionRate,
+    ),
   };
 }

@@ -43,6 +43,52 @@ export function createCatalogRoutes(
     return c.json({ document: meta });
   });
 
+  routes.patch('/catalog/me/profile', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const body = (await c.req.json().catch(() => null)) as {
+      bio?: string;
+      baseLat?: number;
+      baseLng?: number;
+      radiusKm?: number;
+    } | null;
+    if (!body) {
+      throw new ValidationError('errors.validation');
+    }
+    const provider = await catalog.updateProfile(account.id, body);
+    return c.json({ provider });
+  });
+
+  routes.get('/catalog/me/services', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    return c.json({ services: await catalog.listServices(account.id) });
+  });
+
+  routes.post('/catalog/me/services', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const body = (await c.req.json().catch(() => null)) as {
+      name?: string;
+      description?: string;
+      durationMinutes?: number;
+      priceMinor?: number;
+    } | null;
+    if (!body?.name || body.durationMinutes === undefined || body.priceMinor === undefined) {
+      throw new ValidationError('errors.validation');
+    }
+    const service = await catalog.addService(account.id, {
+      name: body.name,
+      description: body.description ?? '',
+      durationMinutes: body.durationMinutes,
+      priceMinor: body.priceMinor,
+    });
+    const quote = await catalog.quoteService(account.id, service.id);
+    return c.json({ service, quote });
+  });
+
+  routes.get('/catalog/me/services/:id/quote', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    return c.json({ quote: await catalog.quoteService(account.id, c.req.param('id')) });
+  });
+
   routes.post('/catalog/me/submit', async (c) => {
     const account = await requireProvider(c, identity, config);
     const provider = await catalog.submit(account.id);
