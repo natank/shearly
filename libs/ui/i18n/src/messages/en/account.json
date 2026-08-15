@@ -12,7 +12,7 @@
   "passwordHint": "At least 10 characters",
   "customerHome": "Your account",
   "providerHome": "Provider home",
-  "providerDraft": "Vetting status: draft. The admin queue is not open yet.",
+  "providerDraft": "Use the sections below to apply, set your menu and hours, then go live.",
   "resetPassword": "Reset password",
   "requestReset": "Send reset link",
   "newPassword": "New password",

@@ -16,10 +16,10 @@ export default async function ProviderPage({ params }: { params: Promise<{ local
   }
   const t = await getTranslations('account');
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <h1>{t('providerHome')}</h1>
-      <p>{account.email}</p>
-      <p>{t('providerDraft')}</p>
+    <main className="mx-auto flex w-full max-w-xl flex-col gap-4 p-4">
+      <h1 className="text-xl font-medium">{t('providerHome')}</h1>
+      <p className="text-sm">{account.email}</p>
+      <p className="text-sm">{t('providerDraft')}</p>
       <ProviderDashboard />
       <SignOutButton />
     </main>
