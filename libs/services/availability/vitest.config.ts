@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths({ root: '../../../' })],
   test: {
     globals: true,
+    fileParallelism: false,
     include: ['src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
