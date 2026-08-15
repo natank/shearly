@@ -6,7 +6,12 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  transpilePackages: ['@shearly/ui-design-system', '@shearly/ui-i18n', '@shearly/feature-account'],
+  transpilePackages: [
+    '@shearly/ui-design-system',
+    '@shearly/ui-i18n',
+    '@shearly/feature-account',
+    '@shearly/feature-provider',
+  ],
   async rewrites() {
     return [{ source: '/api/:path*', destination: 'http://127.0.0.1:4000/api/:path*' }];
   },

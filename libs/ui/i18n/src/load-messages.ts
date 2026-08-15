@@ -10,6 +10,26 @@ export async function loadCommonMessages(locale: Locale) {
   }
 }
 
+export async function loadProviderMessages(locale: Locale) {
+  switch (locale) {
+    case 'he':
+      return (await import('./messages/he/provider.json')).default;
+    case 'en':
+    default:
+      return (await import('./messages/en/provider.json')).default;
+  }
+}
+
+export async function loadVettingMessages(locale: Locale) {
+  switch (locale) {
+    case 'he':
+      return (await import('./messages/he/vetting.json')).default;
+    case 'en':
+    default:
+      return (await import('./messages/en/vetting.json')).default;
+  }
+}
+
 export async function loadAccountMessages(locale: Locale) {
   switch (locale) {
     case 'he':

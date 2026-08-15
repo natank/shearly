@@ -1,6 +1,11 @@
 import { getRequestConfig } from 'next-intl/server';
 import { hasLocale } from 'next-intl';
-import { loadAccountMessages, loadCommonMessages, routing } from '@shearly/ui-i18n';
+import {
+  loadAccountMessages,
+  loadCommonMessages,
+  loadVettingMessages,
+  routing,
+} from '@shearly/ui-i18n';
 
 export default getRequestConfig(async ({ requestLocale }) => {
   const requested = await requestLocale;
@@ -10,6 +15,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
     messages: {
       common: await loadCommonMessages(locale),
       account: await loadAccountMessages(locale),
+      vetting: await loadVettingMessages(locale),
     },
   };
 });

@@ -129,6 +129,9 @@ importers:
       '@shearly/feature-account':
         specifier: workspace:*
         version: link:../../libs/ui/feature-account
+      '@shearly/feature-provider':
+        specifier: workspace:*
+        version: link:../../libs/ui/feature-provider
       '@shearly/ui-design-system':
         specifier: workspace:*
         version: link:../../libs/ui/design-system
@@ -146,6 +149,9 @@ importers:
       '@shearly/feature-account':
         specifier: workspace:*
         version: link:../../libs/ui/feature-account
+      '@shearly/feature-provider':
+        specifier: workspace:*
+        version: link:../../libs/ui/feature-provider
       '@shearly/ui-design-system':
         specifier: workspace:*
         version: link:../../libs/ui/design-system
@@ -212,7 +218,11 @@ importers:
 
   libs/ui/feature-discovery: {}
 
-  libs/ui/feature-provider: {}
+  libs/ui/feature-provider:
+    dependencies:
+      '@shearly/ui-design-system':
+        specifier: workspace:*
+        version: link:../design-system
 
   libs/ui/i18n: {}
 
