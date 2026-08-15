@@ -21,6 +21,8 @@ describe('postgres smoke', () => {
         `SELECT 1 FROM information_schema.schemata WHERE schema_name = 'identity'`,
       );
       expect(schema.rowCount).toBe(1);
+      const postgis = await client.query(`SELECT 1 FROM pg_extension WHERE extname = 'postgis'`);
+      expect(postgis.rowCount).toBe(1);
       for (const name of ['catalog', 'availability', 'payments']) {
         const extra = await client.query(
           `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`,

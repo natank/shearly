@@ -33,5 +33,7 @@ describe('catalog migrate', () => {
     const second = await catalog.ensureDraft(accountId);
     expect(first.status).toBe('draft');
     expect(second.id).toBe(first.id);
+    const ext = await pool.query(`SELECT 1 FROM pg_extension WHERE extname = 'postgis'`);
+    expect(ext.rowCount).toBe(1);
   });
 });
