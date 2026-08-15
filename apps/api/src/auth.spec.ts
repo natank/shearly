@@ -91,6 +91,11 @@ describe('auth HTTP', () => {
     expect(await first.json()).toEqual(await duplicate.json());
     expect(cookie(first)).toContain('shearly_session=');
     expect(cookie(duplicate)).not.toContain('shearly_session=');
+    const me = await app.request('/me', { headers: { cookie: cookie(first) } });
+    const account = (await me.json()) as { account: { id: string } };
+    expect(await services?.catalog.getByAccount(account.account.id)).toMatchObject({
+      status: 'draft',
+    });
 
     const unknown = await app.request('/auth/sign-in', {
       method: 'POST',

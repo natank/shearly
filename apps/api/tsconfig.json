@@ -13,6 +13,15 @@
       "path": "../../libs/services/identity"
     },
     {
+      "path": "../../libs/services/provider-catalog"
+    },
+    {
+      "path": "../../libs/services/availability"
+    },
+    {
+      "path": "../../libs/services/payments"
+    },
+    {
       "path": "../../libs/contracts/identity"
     },
     {

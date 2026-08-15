@@ -6,7 +6,7 @@ import { compose, type AppServices } from './compose.js';
 
 export function createApp(services: AppServices = compose()) {
   const app = new Hono();
-  const auth = createAuthRoutes(services.identity, services.config);
+  const auth = createAuthRoutes(services.identity, services.config, services.catalog);
 
   app.get('/health', (c) => c.json({ ok: true }));
   app.route('/', auth);

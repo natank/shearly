@@ -1,10 +1,12 @@
 import pg from 'pg';
 import { loadConfig, type AppConfig } from '@shearly/shared-config';
 import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/services-identity';
+import { CatalogService } from '@shearly/services-provider-catalog';
 
 export type AppServices = {
   config: AppConfig;
   identity: IdentityService;
+  catalog: CatalogService;
   pool: pg.Pool;
 };
 
@@ -15,5 +17,6 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
     config,
     pool,
     identity: new IdentityService(pool, config, sendMail ?? createSmtpMailer(config.smtpUrl)),
+    catalog: new CatalogService(pool),
   };
 }

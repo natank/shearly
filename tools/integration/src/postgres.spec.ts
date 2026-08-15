@@ -21,6 +21,13 @@ describe('postgres smoke', () => {
         `SELECT 1 FROM information_schema.schemata WHERE schema_name = 'identity'`,
       );
       expect(schema.rowCount).toBe(1);
+      for (const name of ['catalog', 'availability', 'payments']) {
+        const extra = await client.query(
+          `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`,
+          [name],
+        );
+        expect(extra.rowCount).toBe(1);
+      }
     } finally {
       await client.end();
     }
