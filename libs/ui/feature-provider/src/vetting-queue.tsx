@@ -37,15 +37,21 @@ export function VettingQueue() {
   return (
     <ul className="flex flex-col gap-3">
       {queue.map((item) => (
-        <li key={item.id} className="flex flex-col gap-2">
-          <p>{item.id}</p>
-          <Button type="button" onClick={() => void decide(item.id, 'interview')}>
-            {t('interview')}
-          </Button>
-          <Button type="button" onClick={() => void decide(item.id, 'approve')}>
-            {t('approve')}
-          </Button>
-          <Button type="button" onClick={() => void decide(item.id, 'reject')}>
+        <li key={item.id} className="flex flex-col gap-2 rounded-md border border-input p-3">
+          <p className="text-sm">
+            {item.status === 'interview_scheduled' ? t('statusInterview') : t('statusPending')}
+          </p>
+          {item.status === 'pending_review' ? (
+            <Button type="button" onClick={() => void decide(item.id, 'interview')}>
+              {t('interview')}
+            </Button>
+          ) : null}
+          {item.status === 'interview_scheduled' ? (
+            <Button type="button" onClick={() => void decide(item.id, 'approve')}>
+              {t('approve')}
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => void decide(item.id, 'reject')}>
             {t('reject')}
           </Button>
         </li>

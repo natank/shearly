@@ -40,5 +40,9 @@
   "unlistMe": "Leave discovery",
   "connect": "Payouts",
   "connectStub": "Mark payouts complete (local)",
-  "missing": "Still needed"
+  "missing": "Still needed",
+  "missingVetting": "Admin has not approved you yet. Submit the application, then in another window open admin on port 4300, sign in as admin@shearly.local, schedule interview, then approve.",
+  "missingConnect": "Payouts are not marked complete.",
+  "missingServices": "Add at least one service.",
+  "missingAvailability": "Save weekly hours."
 }

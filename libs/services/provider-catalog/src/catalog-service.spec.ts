@@ -76,7 +76,9 @@ describe('CatalogService vetting', () => {
     });
     const interviewed = await catalog.decide(admin, submitted.id, 'interview');
     expect(interviewed.status).toBe('interview_scheduled');
+    expect((await catalog.listQueue()).some((row) => row.id === interviewed.id)).toBe(true);
     const approved = await catalog.decide(admin, interviewed.id, 'approve', 'ok');
+    expect((await catalog.listQueue()).some((row) => row.id === approved.id)).toBe(false);
     expect(approved.status).toBe('approved');
 
     const idDoc = (await catalog.application(accountId)).documents.find(
