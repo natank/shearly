@@ -2,7 +2,7 @@
 
 **Stage:** 4 of 4 (Implementation Plan)
 **Scope:** MVP only. Product Phase 2+ appears as a roadmap, not as build work.
-**Status:** M0–M2 complete on `main` (2026-08-15). Next: write `m3-demand.md`. M4–M5 plans not written.
+**Status:** M0–M2 complete on `main` (2026-08-15). M3 plan accepted (`m3-demand.md`). Next: implement `M3-P1`…`M3-P6`. M4–M5 plans not written.
 **Source:** `docs/mvp/mvp-kickoff.md`, `docs/01-vision.md`, `docs/mvp/02-requirements.md`, `docs/mvp/03-design.md`
 
 This file is the **master plan**. Milestone plans live beside it and are the source of PR sequences. The master owns the cuts, the story map, and the MVP Definition of Done. A milestone plan may not add, drop, or move a story without updating §4–§5 here.
@@ -13,11 +13,11 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 
 | ID | Document | Role | Status |
 |---|---|---|---|
-| **MASTER** | [04-implementation-plan.md](./04-implementation-plan.md) | Cuts, story map, DoD, delivery outline | Active — M0–M2 shipped |
+| **MASTER** | [04-implementation-plan.md](./04-implementation-plan.md) | Cuts, story map, DoD, delivery outline | Active — M0–M2 shipped; M3 plan accepted |
 | **M0** | [m0-foundation.md](./m0-foundation.md) | Foundation PR sequence | Complete |
 | **M1** | [m1-accounts.md](./m1-accounts.md) | Accounts | Complete |
 | **M2** | [m2-supply.md](./m2-supply.md) | Supply | Complete |
-| **M3** | `m3-demand.md` | Demand | Not written |
+| **M3** | [m3-demand.md](./m3-demand.md) | Demand | Accepted — implement P1–P6 |
 | **M4** | `m4-transaction.md` | Transaction | Not written |
 | **M5** | `m5-operate-and-bar.md` | Operate & bar | Not written |
 
@@ -28,7 +28,7 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 | **M0** | written | **Complete** — PRs [#7](https://github.com/natank/shearly/pull/7)–[#14](https://github.com/natank/shearly/pull/14) | CI gates 1–8 and Image smoke green on merge of #14 (`6b123c5`, 2026-08-14) |
 | **M1** | [complete](./m1-accounts.md) | **Complete** — PRs [#16](https://github.com/natank/shearly/pull/16)–[#21](https://github.com/natank/shearly/pull/21) | CI green on each merge |
 | **M2** | [complete](./m2-supply.md) | **Complete** — PRs [#24](https://github.com/natank/shearly/pull/24)–[#30](https://github.com/natank/shearly/pull/30) | CI green on P5–P7; P3/P4 schema-race fixed in follow-ups |
-| **M3** | not written | not started | — |
+| **M3** | [accepted](./m3-demand.md) | not started | Plan is the go-ahead; code starts at `M3-P1` |
 | **M4** | not written | not started | — |
 | **M5** | not written | not started | — |
 
@@ -196,7 +196,8 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M3 — Demand
 
-**Plan:** `m3-demand.md` (not written)
+**Plan:** [m3-demand.md](./m3-demand.md)  
+**Status:** Accepted (2026-08-15). Implementation not started.
 
 **Goal.** The visitor-facing product exists without taking money. Ranking seam is real from the first ranking commit.
 
@@ -322,4 +323,4 @@ RAG has no hook in M0–M5 beyond "do not design around it."
 
 ## 10. Next Step
 
-M0–M2 are shipped. Write [`m3-demand.md`](./m3-demand.md) next, accept it, then implement. Do not pre-write M4–M5.
+M3 plan is accepted. Implement [`m3-demand.md`](./m3-demand.md) `M3-P1`…`M3-P6` in order. Do not pre-write M4–M5.
