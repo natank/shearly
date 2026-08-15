@@ -16,6 +16,13 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
+      command: 'node server.mjs',
+      cwd: '../../tools/geocoder-stub',
+      url: 'http://127.0.0.1:3001/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
       command: 'pnpm exec tsx src/main.ts',
       cwd: '../api',
       url: 'http://127.0.0.1:4000/health',

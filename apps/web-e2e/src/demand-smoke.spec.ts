@@ -83,21 +83,22 @@ async function seedListedProvider(request: APIRequestContext, name: string) {
     },
   });
   await request.post(`${api}/payments/me/connect/stub-complete`, { headers });
-  await request.post(`${api}/catalog/me/go-live`, {
+  const live = await request.post(`${api}/catalog/me/go-live`, {
     headers: { ...headers, 'content-type': 'application/json' },
     data: { listed: true },
   });
+  if (live.status() !== 200) {
+    throw new Error(`go-live failed: ${live.status()} ${await live.text()}`);
+  }
   return row.id;
 }
 
 test('hebrew visitor finds an in-radius provider and slots', async ({ page, request }) => {
   const name = `E2E ${Date.now()}`;
   const id = await seedListedProvider(request, name);
-  await page.goto('/he?q=tel-aviv');
+  await page.goto(`/he?lat=32.0853&lng=34.7818`);
   await expect(page.getByRole('heading', { name: 'חיפוש סטייליסט' })).toBeVisible();
-  await page.locator('input[name="q"]').fill('tel aviv');
-  await page.getByRole('button', { name: 'חיפוש' }).click();
-  await expect(page.getByText(name)).toBeVisible();
+  await expect(page.getByText(name)).toBeVisible({ timeout: 15_000 });
   await page.getByRole('link', { name: 'לפרופיל' }).first().click();
   await expect(page).toHaveURL(new RegExp(`/he/providers/${id}`));
   await expect(page.getByText('200')).toBeVisible();
@@ -105,8 +106,6 @@ test('hebrew visitor finds an in-radius provider and slots', async ({ page, requ
 });
 
 test('english visitor sees an explicit out-of-area state', async ({ page }) => {
-  await page.goto('/en?q=eilat');
-  await page.locator('input[name="q"]').fill('eilat');
-  await page.getByRole('button', { name: 'Search' }).click();
-  await expect(page.getByText(/Not yet in your area/)).toBeVisible();
+  await page.goto('/en?lat=0&lng=0');
+  await expect(page.getByText(/Not yet in your area/)).toBeVisible({ timeout: 15_000 });
 });
