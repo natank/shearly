@@ -6,8 +6,8 @@
 **Requirements:** CUS-001 (browse + profile + slots only), CUS-005, DIS-001, DIS-002, DIS-003 (`P1`), DIS-004, DIS-005, RAT-002. NFR-PERF-001/002 as budgets.  
 **Depends on:** M2 complete  
 **Unlocks:** M4 booking (honest slots exist)  
-**Status:** Accepted  
-**Implementation:** not started — this file is the go-ahead (master §6)
+**Status:** Complete  
+**Implementation:** shipped on `main` 2026-08-15 (merge of [#41](https://github.com/natank/shearly/pull/41))
 
 ---
 
@@ -76,6 +76,17 @@ M3-P6 E2E both locales
 ```
 
 Nothing is parallel. M0/M1/M2 smokes must stay green.
+
+### Delivery (as shipped)
+
+| Plan ID | PR | Title | Merged |
+|---|---|---|---|
+| M3-P1 | [#36](https://github.com/natank/shearly/pull/36) | Catalog geography and listed in-radius query | 2026-08-15 |
+| M3-P2 | [#37](https://github.com/natank/shearly/pull/37) | Ranking seam and discovery composer | 2026-08-15 |
+| M3-P3 | [#38](https://github.com/natank/shearly/pull/38) | Public profile, slots, and ratings | 2026-08-15 |
+| M3-P4 | [#39](https://github.com/natank/shearly/pull/39) | Customer address book | 2026-08-15 |
+| M3-P5 | [#40](https://github.com/natank/shearly/pull/40) | Discovery and profile UI | 2026-08-15 |
+| M3-P6 | [#41](https://github.com/natank/shearly/pull/41) | Demand loop E2E both locales | 2026-08-15 |
 
 ### M3-P1 — PostGIS and listed in-radius query
 
@@ -247,22 +258,22 @@ DISCOVERY_WINDOW_DAYS=30
 
 ## 6. Exit checklist
 
-- [ ] No login wall on `/he` or `/en` discovery (CUS-001 browse)
-- [ ] Results require a location; missing location is an explicit prompt, not a global list (DIS-001)
-- [ ] Only `listed` + `approved` providers whose radius covers the point appear (`ST_DWithin`) (DIS-001)
-- [ ] Out-of-area is an explicit state, not an empty list (DIS-001, CUS-005)
-- [ ] Cards show name, photo, headline price, rating or “new provider”, vetting badge, next slot (DIS-001, RAT-002)
-- [ ] Ranking is only behind `ProviderRanker`; weights from config; StubRanker reverses `GET /discovery` (DIS-002)
-- [ ] Ranker failure falls back to distance then rating (DIS-002)
-- [ ] Filters (service, price, rating, date) live in the URL and name themselves when they match nothing (DIS-003)
-- [ ] Public profile: bio, portfolio, menu with travel-included prices, badge meaning, reviews, inline slots (DIS-004, DIS-005, RAT-002)
-- [ ] Shown slots come from `slot-computation` (duration + rules + buffer); occupancy fixtures only (DIS-005)
-- [ ] Signed-in customer can save a labeled address with optional access notes (CUS-005)
-- [ ] Provider A cannot read B’s addresses; unlisted providers 404 on public GET (NFR-SEC-008)
-- [ ] ID/credential bytes stay private; listed portfolio is readable (NFR-SEC-002 still holds)
-- [ ] `/he` and `/en` discovery strings; M0/M1/M2 smokes still pass
-- [ ] CI 1–8 green on every M3 PR
-- [ ] No `POST /bookings`; no payment; no mid-flow auth restore
+- [x] No login wall on `/he` or `/en` discovery (CUS-001 browse)
+- [x] Results require a location; missing location is an explicit prompt, not a global list (DIS-001)
+- [x] Only `listed` + `approved` providers whose radius covers the point appear (`ST_DWithin`) (DIS-001)
+- [x] Out-of-area is an explicit state, not an empty list (DIS-001, CUS-005)
+- [x] Cards show name, photo, headline price, rating or “new provider”, vetting badge, next slot (DIS-001, RAT-002)
+- [x] Ranking is only behind `ProviderRanker`; weights from config; StubRanker reverses `GET /discovery` (DIS-002)
+- [x] Ranker failure falls back to distance then rating (DIS-002)
+- [x] Filters (service, price, rating, date) live in the URL and name themselves when they match nothing (DIS-003)
+- [x] Public profile: bio, portfolio, menu with travel-included prices, badge meaning, reviews, inline slots (DIS-004, DIS-005, RAT-002)
+- [x] Shown slots come from `slot-computation` (duration + rules + buffer); occupancy fixtures only (DIS-005)
+- [x] Signed-in customer can save a labeled address with optional access notes (CUS-005)
+- [x] Provider A cannot read B’s addresses; unlisted providers 404 on public GET (NFR-SEC-008)
+- [x] ID/credential bytes stay private; listed portfolio is readable (NFR-SEC-002 still holds)
+- [x] `/he` and `/en` discovery strings; M0/M1/M2 smokes still pass
+- [x] CI 1–8 green on every M3 PR
+- [x] No `POST /bookings`; no payment; no mid-flow auth restore
 
 Master demo: “Anonymous visitor, in Hebrew, finds an in-radius approved provider and sees real slots.”
 
@@ -315,4 +326,4 @@ None changes the master cuts. Auto-accepted with these defaults.
 
 ## 10. Next
 
-Implement `M3-P1`…`M3-P6` in order. Merge each only with gates 1–8 green. After M3 exit, write [`m4-transaction.md`](./m4-transaction.md). Do not write M5 yet (master §6).
+M3 is complete. Write [`m4-transaction.md`](./m4-transaction.md). Do not write M5 yet (master §6).
