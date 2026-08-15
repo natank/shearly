@@ -15,6 +15,8 @@ import {
   type IdentityService,
 } from '@shearly/services-identity';
 import type { CatalogService } from '@shearly/services-provider-catalog';
+import { requireCustomer } from './session.js';
+import { geocodeAddress } from './geocode.js';
 
 function clientIp(header: string | undefined): string {
   return header?.split(',')[0]?.trim() || '127.0.0.1';
@@ -125,6 +127,41 @@ export function createAuthRoutes(
       throw new AppError('UNAUTHORIZED', 'errors.unauthorized', 401);
     }
     return c.json({ account });
+  });
+
+  routes.get('/account/me/addresses', async (c) => {
+    const account = await requireCustomer(c, identity, config);
+    return c.json({ addresses: await identity.listAddresses(account.id) });
+  });
+
+  routes.post('/account/me/addresses', async (c) => {
+    const account = await requireCustomer(c, identity, config);
+    const body = (await c.req.json().catch(() => null)) as {
+      label?: string;
+      line?: string;
+      accessNotes?: string;
+    } | null;
+    if (!body?.label || !body.line) {
+      throw new ValidationError('errors.validation');
+    }
+    const point = await geocodeAddress(config.geocoderUrl, body.line);
+    if (!point) {
+      throw new ValidationError('discovery.unknownAddress');
+    }
+    const address = await identity.addAddress(account.id, {
+      label: body.label,
+      line: body.line,
+      lat: point.lat,
+      lng: point.lng,
+      accessNotes: body.accessNotes,
+    });
+    return c.json({ address });
+  });
+
+  routes.delete('/account/me/addresses/:id', async (c) => {
+    const account = await requireCustomer(c, identity, config);
+    await identity.deleteAddress(account.id, c.req.param('id'));
+    return c.json({ ok: true });
   });
 
   return routes;

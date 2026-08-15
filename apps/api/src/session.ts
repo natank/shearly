@@ -29,6 +29,18 @@ export async function requireAdmin(
   return account;
 }
 
+export async function requireCustomer(
+  c: Context,
+  identity: IdentityService,
+  config: AppConfig,
+): Promise<PublicAccount> {
+  const account = await requireAccount(c, identity, config);
+  if (account.role !== 'customer') {
+    throw new AuthorizationError('errors.unauthorized');
+  }
+  return account;
+}
+
 export async function requireProvider(
   c: Context,
   identity: IdentityService,
