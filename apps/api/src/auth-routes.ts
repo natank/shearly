@@ -14,6 +14,7 @@ import {
   encodeGuestDraft,
   type IdentityService,
 } from '@shearly/services-identity';
+import type { CatalogService } from '@shearly/services-provider-catalog';
 
 function clientIp(header: string | undefined): string {
   return header?.split(',')[0]?.trim() || '127.0.0.1';
@@ -29,7 +30,11 @@ function cookieOpts(config: AppConfig) {
   };
 }
 
-export function createAuthRoutes(identity: IdentityService, config: AppConfig) {
+export function createAuthRoutes(
+  identity: IdentityService,
+  config: AppConfig,
+  catalog?: CatalogService,
+) {
   const routes = new Hono();
 
   routes.post('/auth/register', async (c) => {
@@ -37,12 +42,15 @@ export function createAuthRoutes(identity: IdentityService, config: AppConfig) {
     if (!parsed.success) {
       throw new ValidationError('errors.validation');
     }
-    const { sessionToken } = await identity.register({
+    const registered = await identity.register({
       ...parsed.data,
       ip: clientIp(c.req.header('x-forwarded-for')),
     });
-    if (sessionToken) {
-      setCookie(c, config.sessionCookieName, sessionToken, cookieOpts(config));
+    if (registered.sessionToken) {
+      setCookie(c, config.sessionCookieName, registered.sessionToken, cookieOpts(config));
+      if (catalog && registered.role === 'provider' && registered.accountId) {
+        await catalog.ensureDraft(registered.accountId);
+      }
     }
     return c.json({ ok: true, translationKey: 'auth.registerAccepted' });
   });

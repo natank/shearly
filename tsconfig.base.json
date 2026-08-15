@@ -22,9 +22,14 @@
       "@shearly/services-identity": ["libs/services/identity/src/index.ts"],
       "@shearly/services-identity/migrate": ["libs/services/identity/src/migrate.ts"],
       "@shearly/services-provider-catalog": ["libs/services/provider-catalog/src/index.ts"],
+      "@shearly/services-provider-catalog/migrate": [
+        "libs/services/provider-catalog/src/migrate.ts"
+      ],
       "@shearly/services-availability": ["libs/services/availability/src/index.ts"],
+      "@shearly/services-availability/migrate": ["libs/services/availability/src/migrate.ts"],
       "@shearly/services-booking": ["libs/services/booking/src/index.ts"],
       "@shearly/services-payments": ["libs/services/payments/src/index.ts"],
+      "@shearly/services-payments/migrate": ["libs/services/payments/src/migrate.ts"],
       "@shearly/services-notifications": ["libs/services/notifications/src/index.ts"],
       "@shearly/contracts-identity": ["libs/contracts/identity/src/index.ts"],
       "@shearly/contracts-provider-catalog": ["libs/contracts/provider-catalog/src/index.ts"],

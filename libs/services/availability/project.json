@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/services/availability/src",
   "projectType": "library",
-  "tags": ["type:service"]
+  "tags": ["type:service"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/services/availability/vitest.config.ts"
+      }
+    }
+  }
 }

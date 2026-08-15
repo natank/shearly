@@ -45,7 +45,7 @@ export class IdentityService {
     role: RegisterRole;
     locale: Locale;
     ip: string;
-  }): Promise<{ sessionToken: string | null }> {
+  }): Promise<{ sessionToken: string | null; accountId?: string; role?: RegisterRole }> {
     await this.enforceRateLimit('register', input.ip);
     try {
       assertPasswordPolicy(input.password, this.config.passwordMinLength);
@@ -70,7 +70,7 @@ export class IdentityService {
       );
       const account = inserted.rows[0];
       const sessionToken = await this.createSession(account.id);
-      return { sessionToken };
+      return { sessionToken, accountId: account.id, role: input.role };
     } catch (error) {
       if (isUniqueViolation(error)) {
         await dummyVerify(input.password);
