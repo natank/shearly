@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { CatalogService } from './catalog-service.js';
+import { FsDocumentStore } from './document-store.js';
 import { PROVIDER_CATALOG_SERVICE_NAME } from './index.js';
 import { migrateCatalog } from './migrate.js';
 
@@ -26,7 +27,7 @@ describe('catalog migrate', () => {
     }
     await migrateCatalog(url);
     await migrateCatalog(url);
-    const catalog = new CatalogService(pool);
+    const catalog = new CatalogService(pool, new FsDocumentStore('/tmp/shearly-docs-test'));
     const accountId = crypto.randomUUID();
     const first = await catalog.ensureDraft(accountId);
     const second = await catalog.ensureDraft(accountId);

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrateIdentity } from '@shearly/services-identity/migrate';
+import { migrateCatalog } from '@shearly/services-provider-catalog/migrate';
 import { createApp } from './app.js';
 import { compose } from './compose.js';
 
@@ -22,6 +23,7 @@ describe('auth HTTP', () => {
       return;
     }
     await migrateIdentity(url);
+    await migrateCatalog(url);
   });
 
   afterAll(async () => {

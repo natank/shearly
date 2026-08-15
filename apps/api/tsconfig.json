@@ -16,13 +16,13 @@
       "path": "../../libs/services/provider-catalog"
     },
     {
+      "path": "../../libs/contracts/identity"
+    },
+    {
       "path": "../../libs/services/availability"
     },
     {
       "path": "../../libs/services/payments"
-    },
-    {
-      "path": "../../libs/contracts/identity"
     },
     {
       "path": "../../libs/shared/config"
