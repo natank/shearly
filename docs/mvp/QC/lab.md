@@ -37,6 +37,22 @@ pnpm nx run-many -t serve -p web,api,admin
 
 If this machine uses Podman: `podman machine start` once per reboot. `docker` may be the Podman CLI.
 
+**Podman socket:** `docker compose` needs `DOCKER_HOST` pointed at the Podman machine's API socket for this shell session:
+
+```bash
+export DOCKER_HOST='unix:///var/folders/qx/kr6jckrn5zl1f41jpc9c2zmc0000gp/T/podman/podman-machine-default-api.sock'
+```
+
+(Path is printed by `podman machine start`; it can change per machine/reboot — re-check if `docker compose` commands fail to connect.)
+
+**No local `psql`:** if `psql` is not installed on the host, run SQL through the Postgres container instead:
+
+```bash
+docker exec shearly_postgres_1 psql "postgres://shearly:shearly@localhost:5432/shearly" -c "<query>"
+```
+
+Use this form wherever this doc says to run `psql ...` directly (bring-up checks, reset ladder, SQL peek).
+
 **First checkout after M3** (or any time the volume was created with vanilla Postgres 16):
 
 ```bash
