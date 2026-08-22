@@ -25,7 +25,8 @@ export function AddressBook() {
 
   async function onSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     await fetch('/api/account/me/addresses', {
       method: 'POST',
       credentials: 'include',
@@ -36,7 +37,7 @@ export function AddressBook() {
         accessNotes: String(form.get('notes') ?? ''),
       }),
     });
-    event.currentTarget.reset();
+    formEl.reset();
     await refresh();
   }
 
