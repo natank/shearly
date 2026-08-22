@@ -98,8 +98,9 @@ test('hebrew visitor finds an in-radius provider and slots', async ({ page, requ
   const id = await seedListedProvider(request, name);
   await page.goto(`/he?lat=32.0853&lng=34.7818`);
   await expect(page.getByRole('heading', { name: 'חיפוש סטייליסט' })).toBeVisible();
-  await expect(page.getByText(name)).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('link', { name: 'לפרופיל' }).first().click();
+  const card = page.getByRole('listitem').filter({ hasText: name });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.getByRole('link', { name: 'לפרופיל' }).click();
   await expect(page).toHaveURL(new RegExp(`/he/providers/${id}`));
   await expect(page.getByText('200')).toBeVisible();
   await expect(page.getByText('כולל נסיעה')).toBeVisible();
