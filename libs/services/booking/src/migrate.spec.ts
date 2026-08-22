@@ -86,9 +86,10 @@ describe('booking migrate', () => {
       const bookingId = result.rows[0].id;
 
       // Cancel it (terminal state) — the exclusion constraint only applies to PENDING/CONFIRMED.
-      await pool.query(`UPDATE booking.bookings SET state = 'CANCELLED_BY_CUSTOMER' WHERE id = $1`, [
-        bookingId,
-      ]);
+      await pool.query(
+        `UPDATE booking.bookings SET state = 'CANCELLED_BY_CUSTOMER' WHERE id = $1`,
+        [bookingId],
+      );
 
       // The identical range is now bookable again.
       await pool.query(

@@ -30,9 +30,9 @@ describe('booking-state-machine', () => {
   describe('terminal states reject every event', () => {
     for (const state of TERMINAL_STATES) {
       it(`rejects any event from ${state}`, () => {
-        expect(() =>
-          transition(state, 'ProviderAccepts', ctx({ actor: 'provider' })),
-        ).toThrow(TransitionError);
+        expect(() => transition(state, 'ProviderAccepts', ctx({ actor: 'provider' }))).toThrow(
+          TransitionError,
+        );
       });
     }
   });
@@ -48,9 +48,9 @@ describe('booking-state-machine', () => {
     });
 
     it('rejects ProviderAccepts from a customer actor', () => {
-      expect(() =>
-        transition('PENDING', 'ProviderAccepts', ctx({ actor: 'customer' })),
-      ).toThrow(/unauthorizedActor/);
+      expect(() => transition('PENDING', 'ProviderAccepts', ctx({ actor: 'customer' }))).toThrow(
+        /unauthorizedActor/,
+      );
     });
 
     it('ProviderDeclines -> DECLINED, releases auth and hold, notifies with alternatives', () => {
@@ -125,15 +125,13 @@ describe('booking-state-machine', () => {
       );
       expect(result.nextState).toBe('CANCELLED_BY_CUSTOMER');
       expect(result.effects).toContainEqual({ type: 'ReleaseAuth' });
-      expect(result.effects).not.toContainEqual(
-        expect.objectContaining({ type: 'Capture' }),
-      );
+      expect(result.effects).not.toContainEqual(expect.objectContaining({ type: 'Capture' }));
     });
 
     it('rejects an event not defined for PENDING', () => {
-      expect(() =>
-        transition('PENDING', 'ProviderCompletes', ctx({ actor: 'provider' })),
-      ).toThrow(/noSuchTransition/);
+      expect(() => transition('PENDING', 'ProviderCompletes', ctx({ actor: 'provider' }))).toThrow(
+        /noSuchTransition/,
+      );
     });
   });
 
@@ -204,9 +202,9 @@ describe('booking-state-machine', () => {
     });
 
     it('rejects CustomerCancels actor mismatch', () => {
-      expect(() =>
-        transition('CONFIRMED', 'CustomerCancels', ctx({ actor: 'provider' })),
-      ).toThrow(/unauthorizedActor/);
+      expect(() => transition('CONFIRMED', 'CustomerCancels', ctx({ actor: 'provider' }))).toThrow(
+        /unauthorizedActor/,
+      );
     });
   });
 
@@ -299,9 +297,9 @@ describe('booking-state-machine', () => {
 
   describe('unlisted from/event combinations', () => {
     it('rejects an event not defined for CONFIRMED', () => {
-      expect(() =>
-        transition('CONFIRMED', 'ProviderDeclines', ctx({ actor: 'provider' })),
-      ).toThrow(/noSuchTransition/);
+      expect(() => transition('CONFIRMED', 'ProviderDeclines', ctx({ actor: 'provider' }))).toThrow(
+        /noSuchTransition/,
+      );
     });
   });
 
@@ -363,11 +361,7 @@ describe('booking-state-machine', () => {
     }
 
     it('PENDING + ResponseDeadlinePassed (by system) -> EXPIRED', () => {
-      const deadline = computeResponseDeadline(
-        new Date('2026-08-25T09:00:00Z'),
-        SLOT_START,
-        2,
-      );
+      const deadline = computeResponseDeadline(new Date('2026-08-25T09:00:00Z'), SLOT_START, 2);
       const result = transition(
         'PENDING',
         'ResponseDeadlinePassed',

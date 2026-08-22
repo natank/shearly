@@ -113,10 +113,7 @@ export function transition(
   context: TransitionContext,
 ): TransitionResult {
   if (isTerminal(current)) {
-    throw new TransitionError(
-      'TERMINAL_STATE',
-      `booking.terminalState:${current}`,
-    );
+    throw new TransitionError('TERMINAL_STATE', `booking.terminalState:${current}`);
   }
 
   switch (current) {
@@ -125,7 +122,10 @@ export function transition(
     case 'CONFIRMED':
       return transitionFromConfirmed(event, context);
     default:
-      throw new TransitionError('NO_SUCH_TRANSITION', `booking.noSuchTransition:${current}:${event}`);
+      throw new TransitionError(
+        'NO_SUCH_TRANSITION',
+        `booking.noSuchTransition:${current}:${event}`,
+      );
   }
 }
 
@@ -210,9 +210,7 @@ function transitionFromConfirmed(
       return {
         nextState: 'CANCELLED_BY_CUSTOMER',
         effects: [
-          context.alreadyCaptured
-            ? { type: 'Refund', pct: 50 }
-            : { type: 'Capture', pct: 50 },
+          context.alreadyCaptured ? { type: 'Refund', pct: 50 } : { type: 'Capture', pct: 50 },
           { type: 'Split' },
           { type: 'ReleaseHold' },
           { type: 'Notify', recipients: ['provider'] },
@@ -286,6 +284,9 @@ function transitionFromConfirmed(
       };
 
     default:
-      throw new TransitionError('NO_SUCH_TRANSITION', `booking.noSuchTransition:CONFIRMED:${event}`);
+      throw new TransitionError(
+        'NO_SUCH_TRANSITION',
+        `booking.noSuchTransition:CONFIRMED:${event}`,
+      );
   }
 }

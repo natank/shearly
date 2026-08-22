@@ -29,9 +29,7 @@ export async function migrateBooking(databaseUrl: string): Promise<string[]> {
     const files = readdirSync(migrationsDir)
       .filter((name) => name.endsWith('.sql'))
       .sort();
-    const existing = await client.query<{ id: string }>(
-      'SELECT id FROM booking.schema_migrations',
-    );
+    const existing = await client.query<{ id: string }>('SELECT id FROM booking.schema_migrations');
     const done = new Set(existing.rows.map((row) => row.id));
     for (const file of files) {
       if (done.has(file)) {
