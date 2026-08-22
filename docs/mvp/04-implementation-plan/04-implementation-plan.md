@@ -20,7 +20,7 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 | **M3** | [m3-demand.md](./m3-demand.md) | Demand | Complete |
 | **M4** | `m4-transaction.md` | Transaction | Not written |
 | **M5** | `m5-operate-and-bar.md` | Operate & bar | Not written |
-| **QC** | [QC/](../QC/README.md) | Manual STD per shipped milestone | M0–M3 written |
+| **QC** | [QC/](../QC/README.md) | Manual STD written when the milestone plan is accepted, before its PRs are implemented (QC/README.md §4) | M0–M3 written |
 
 ### Implementation progress
 
@@ -214,7 +214,8 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M4 — Transaction
 
-**Plan:** `m4-transaction.md` (not written)
+**Plan:** `m4-transaction.md` (not written)  
+**QC:** `docs/mvp/QC/std-m4-transaction.md` — write alongside plan acceptance, before M4-P1 starts (QC/README.md §4)
 
 **Goal.** The loop that is the demo: book, fund, accept, complete, cancel, decline. Money and occupancy are correct under concurrency.
 
@@ -230,7 +231,8 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M5 — Operate & bar
 
-**Plan:** `m5-operate-and-bar.md` (not written)
+**Plan:** `m5-operate-and-bar.md` (not written)  
+**QC:** `docs/mvp/QC/std-m5-operate-and-bar.md` — write alongside plan acceptance, before M5-P1 starts (QC/README.md §4)
 
 **Goal.** The founder can run the marketplace, time does the right thing without a request, and a reviewer can finish the demo unaided in both locales.
 
@@ -275,7 +277,7 @@ SC coverage by first milestone that can claim it:
 
 Shape is here; **PR lists live in the milestone files** (`M0-P1`, …).
 
-- **One milestone at a time.** M0 showed that deriving the next milestone plan, then implementing it, is the working loop. Preserve it: `write mN plan → accept → implement mN PRs to exit → write m{N+1}`. Do not batch-write remaining `mN-*.md` files, and do not start `m{N}/*` code before that plan exists.
+- **One milestone at a time.** M0 showed that deriving the next milestone plan, then implementing it, is the working loop. Preserve it: `write mN plan → accept → write std-mN QC (QC/README.md §4) → implement mN PRs to exit → run std-mN on merged main, record PASS/FAIL (QC/README.md §1–§2) → write m{N+1}`. Do not batch-write remaining `mN-*.md` files, and do not start `m{N}/*` code before that plan exists. Do not start `m{N}/*` code before its QC STD exists either — the STD traces every Must procedure to a story/NFR in the just-accepted plan, so writing it after code invites the STD to describe what shipped instead of what was promised. Do not declare `mN` complete on CI green alone — every Must procedure needs a PASS or an explicit WAIVE (owner + reason) in the STD's run log before the milestone is done and before `m{N+1}` is written.
 - **Branch:** `m{N}/{short-slug}` off `main`. One concern per PR, as kickoff requires.
 - **Merge:** design §10.1 gates 1–8. Not advisory. Occupancy and saga tests are required to merge any M4 booking-create PR.
 - **PR description:** milestone PR id (`M0-P3`), story IDs (`BOK-001`) when any, design section if it implements a named mechanism (`§8.4`), test evidence.
