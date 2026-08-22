@@ -3,6 +3,7 @@ import { migrateIdentity } from '@shearly/services-identity/migrate';
 import { migrateCatalog } from '@shearly/services-provider-catalog/migrate';
 import { migrateAvailability } from '@shearly/services-availability/migrate';
 import { migratePayments } from '@shearly/services-payments/migrate';
+import { migrateBooking } from '@shearly/services-booking/migrate';
 import { compose } from './compose.js';
 
 const config = loadConfig();
@@ -11,6 +12,7 @@ for (const [name, run] of [
   ['catalog', migrateCatalog],
   ['availability', migrateAvailability],
   ['payments', migratePayments],
+  ['booking', migrateBooking],
 ] as const) {
   const applied = await run(config.databaseUrl);
   process.stdout.write(

@@ -25,6 +25,9 @@
       "path": "../../libs/services/payments"
     },
     {
+      "path": "../../libs/services/booking"
+    },
+    {
       "path": "../../libs/domain/ranking"
     },
     {
