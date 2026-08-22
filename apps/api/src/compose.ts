@@ -41,6 +41,7 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
       new FsDocumentStore(config.documentStoreDir),
       config.radiusCapKm,
       config.commissionRate,
+      sendMail ?? createSmtpMailer(config.smtpUrl),
     ),
     availability: new AvailabilityService(pool, config.discoveryWindowDays),
     payments: new ConnectService(pool),

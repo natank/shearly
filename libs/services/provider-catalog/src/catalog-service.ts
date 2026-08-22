@@ -4,6 +4,14 @@ import { AuthorizationError, NotFoundError, ValidationError } from '@shearly/sha
 import { splitPrice } from '@shearly/domain-pricing';
 import type { DocumentStore } from './document-store.js';
 
+export type CatalogMail = {
+  to: string;
+  subject: string;
+  text: string;
+};
+
+export type SendMail = (mail: CatalogMail) => Promise<void>;
+
 export type ProviderStatus =
   'draft' | 'pending_review' | 'interview_scheduled' | 'approved' | 'rejected';
 
@@ -50,6 +58,7 @@ export class CatalogService {
     private readonly store: DocumentStore,
     private readonly radiusCapKm = 15,
     private readonly commissionRate = 0.2,
+    private readonly sendMail: SendMail = async () => undefined,
   ) {}
 
   async ensureDraft(accountId: string): Promise<ProviderRow> {
@@ -182,7 +191,10 @@ export class CatalogService {
     return { provider, documents: docs, missing: missingItems(docs) };
   }
 
-  async submit(accountId: string): Promise<ProviderRow> {
+  async submit(
+    accountId: string,
+    notify?: { providerEmail: string; adminEmail: string },
+  ): Promise<ProviderRow> {
     const provider = await this.requireOwn(accountId);
     if (provider.status !== 'draft' && provider.status !== 'rejected') {
       throw new ValidationError('catalog.submitNotAllowed');
@@ -197,6 +209,18 @@ export class CatalogService {
        WHERE id = $1 RETURNING ${PROVIDER_COLS}`,
       [provider.id],
     );
+    if (notify) {
+      await this.sendMail({
+        to: notify.providerEmail,
+        subject: 'Shearly: your vetting packet was submitted',
+        text: 'Your packet is now pending review. We will email you with a decision.',
+      });
+      await this.sendMail({
+        to: notify.adminEmail,
+        subject: 'Shearly: a provider packet needs review',
+        text: `Provider ${provider.id} submitted a vetting packet and is now pending review.`,
+      });
+    }
     return updated.rows[0];
   }
 
@@ -214,6 +238,7 @@ export class CatalogService {
     providerId: string,
     action: 'interview' | 'approve' | 'reject' | 'request_more',
     rationale?: string,
+    notify?: { providerEmail: string },
   ): Promise<ProviderRow> {
     const provider = await this.getById(providerId);
     if (!provider) {
@@ -227,6 +252,13 @@ export class CatalogService {
        RETURNING ${PROVIDER_COLS}`,
       [providerId, next, rationale ?? null, actorAccountId],
     );
+    if (notify) {
+      await this.sendMail({
+        to: notify.providerEmail,
+        subject: 'Shearly: your vetting decision is ready',
+        text: `Your vetting status is now "${next}"${rationale ? `. Note: ${rationale}` : '.'}`,
+      });
+    }
     return updated.rows[0];
   }
 

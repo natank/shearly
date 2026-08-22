@@ -147,4 +147,70 @@ describe('M2 supply loop', () => {
     expect(live.status).toBe(200);
     expect(await live.json()).toMatchObject({ listed: true, ready: true });
   });
+
+  it('mails provider + admin on submit, and provider on decision (M2-T02 regression)', async () => {
+    const sent: { to: string; subject: string; text: string }[] = [];
+    const mailServices = url ? compose(undefined, async (mail) => void sent.push(mail)) : null;
+    const mailApp = mailServices ? createApp(mailServices) : null;
+    if (!mailApp || !mailServices) {
+      return;
+    }
+    try {
+      await mailServices.identity.ensureAdmin(
+        mailServices.config.adminSeedEmail,
+        mailServices.config.adminSeedPassword,
+      );
+      const email = `mail-${crypto.randomUUID()}@example.com`;
+      const register = await mailApp.request('/auth/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.60' },
+        body: JSON.stringify({
+          email,
+          password: 'long-enough-password',
+          role: 'provider',
+          locale: 'he',
+        }),
+      });
+      const session = cookie(register);
+      await upload(mailApp, session, 'government_id', 'id.png');
+      await upload(mailApp, session, 'credential', 'cred.png');
+      for (let i = 0; i < 5; i += 1) {
+        await upload(mailApp, session, 'portfolio', `p${i}.png`);
+      }
+
+      const submitted = await mailApp.request('/catalog/me/submit', {
+        method: 'POST',
+        headers: { cookie: session },
+      });
+      expect(await submitted.json()).toEqual({ status: 'pending_review' });
+      expect(sent).toHaveLength(2);
+      expect(sent.map((mail) => mail.to)).toEqual(
+        expect.arrayContaining([email, mailServices.config.adminSeedEmail]),
+      );
+
+      sent.length = 0;
+      const me = (await (
+        await mailApp.request('/me', { headers: { cookie: session } })
+      ).json()) as { account: { id: string } };
+      const providerId = (await mailServices.catalog.getByAccount(me.account.id))?.id;
+      const adminSignIn = await mailApp.request('/auth/sign-in', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.61' },
+        body: JSON.stringify({
+          email: mailServices.config.adminSeedEmail,
+          password: mailServices.config.adminSeedPassword,
+        }),
+      });
+      const admin = cookie(adminSignIn);
+      await mailApp.request(`/admin/vetting/${providerId}/decision`, {
+        method: 'POST',
+        headers: { cookie: admin, 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'interview', rationale: 'call' }),
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ to: email });
+    } finally {
+      await mailServices.pool.end();
+    }
+  });
 });

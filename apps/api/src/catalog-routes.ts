@@ -104,7 +104,10 @@ export function createCatalogRoutes(
 
   routes.post('/catalog/me/submit', async (c) => {
     const account = await requireProvider(c, identity, config);
-    const provider = await catalog.submit(account.id);
+    const provider = await catalog.submit(account.id, {
+      providerEmail: account.email,
+      adminEmail: config.adminSeedEmail,
+    });
     return c.json({ status: provider.status });
   });
 
@@ -309,11 +312,14 @@ export function createCatalogRoutes(
     if (!body?.action) {
       throw new ValidationError('errors.validation');
     }
+    const target = await catalog.getById(c.req.param('providerId'));
+    const targetAccount = target ? await identity.accountById(target.account_id) : null;
     const provider = await catalog.decide(
       admin.id,
       c.req.param('providerId'),
       body.action,
       body.rationale,
+      targetAccount ? { providerEmail: targetAccount.email } : undefined,
     );
     return c.json({ status: provider.status });
   });
