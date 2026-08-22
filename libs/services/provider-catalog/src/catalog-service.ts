@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { AuthorizationError, NotFoundError, ValidationError } from '@shearly/shared-errors';
+import {
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '@shearly/shared-errors';
 import { splitPrice } from '@shearly/domain-pricing';
 import type { DocumentStore } from './document-store.js';
 
@@ -102,23 +107,31 @@ export class CatalogService {
 
   async addReview(
     providerId: string,
-    input: { rating: number; body?: string },
+    input: { rating: number; body?: string; bookingId?: string },
   ): Promise<{ id: string; rating: number; body: string | null; created_at: Date }> {
     if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
       throw new ValidationError('errors.validation');
     }
     await this.requirePublic(providerId);
-    const inserted = await this.pool.query<{
-      id: string;
-      rating: number;
-      body: string | null;
-      created_at: Date;
-    }>(
-      `INSERT INTO catalog.reviews (provider_id, rating, body)
-       VALUES ($1, $2, $3)
-       RETURNING id, rating, body, created_at`,
-      [providerId, input.rating, input.body ?? null],
-    );
+    let inserted;
+    try {
+      inserted = await this.pool.query<{
+        id: string;
+        rating: number;
+        body: string | null;
+        created_at: Date;
+      }>(
+        `INSERT INTO catalog.reviews (provider_id, rating, body, booking_id)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, rating, body, created_at`,
+        [providerId, input.rating, input.body ?? null, input.bookingId ?? null],
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictError('rating.alreadyReviewed');
+      }
+      throw error;
+    }
     await this.pool.query(
       `UPDATE catalog.providers SET
          rating_sum = rating_sum + $2,
@@ -495,4 +508,13 @@ function nextStatus(
     return 'draft';
   }
   throw new ValidationError('catalog.invalidDecision');
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === '23505'
+  );
 }

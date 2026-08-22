@@ -193,5 +193,61 @@ export function createBookingRoutes(
     return c.json({ id: updated.id, state: updated.state });
   });
 
+  // CUS-006: upcoming (soonest-first) and past, separated. Provider display
+  // name and service name are read from catalog for display — booking only
+  // owns the price snapshot, not the current catalog labels.
+  routes.get('/account/me/bookings', async (c) => {
+    const account = await requireCustomer(c, input.identity, input.config);
+    const { upcoming, past } = await input.booking.listUpcomingAndPast(account.id);
+
+    async function toCard(row: Awaited<ReturnType<typeof input.booking.getById>>) {
+      if (!row) {
+        return null;
+      }
+      const provider = await input.catalog.getById(row.provider_id);
+      const service = await input.catalog.getServiceById(row.service_id);
+      return {
+        id: row.id,
+        state: row.state,
+        providerId: row.provider_id,
+        providerDisplayName: provider?.display_name ?? '',
+        serviceName: service?.name ?? '',
+        slotStart: row.slot_start,
+        slotEnd: row.slot_end,
+        addressLine: row.address_line,
+        totalMinor: row.price_minor,
+        currency: row.currency,
+      };
+    }
+
+    return c.json({
+      upcoming: (await Promise.all(upcoming.map(toCard))).filter(Boolean),
+      past: (await Promise.all(past.map(toCard))).filter(Boolean),
+    });
+  });
+
+  // RAT-001: only a COMPLETED booking may be reviewed, once. The unique
+  // index on catalog.reviews.booking_id (M4-P7) is what actually enforces
+  // "not twice" under concurrency; this check is the friendly 409 path.
+  routes.post('/bookings/:id/review', async (c) => {
+    const booking = await requireOwnBooking(c);
+    if (booking.state !== 'COMPLETED') {
+      throw new ConflictError('rating.notCompleted');
+    }
+    const body = (await c.req.json().catch(() => null)) as {
+      rating?: number;
+      body?: string;
+    } | null;
+    if (!body?.rating) {
+      throw new ValidationError('errors.validation');
+    }
+    const review = await input.catalog.addReview(booking.provider_id, {
+      rating: body.rating,
+      body: body.body,
+      bookingId: booking.id,
+    });
+    return c.json({ review }, 201);
+  });
+
   return routes;
 }
