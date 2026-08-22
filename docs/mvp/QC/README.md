@@ -13,6 +13,8 @@
 
 Shared lab, credentials, and wipe/reset: [lab.md](./lab.md).
 
+Running log of confirmed FAILs pending triage into the backlog: [findings.md](./findings.md).
+
 M4–M5 STDs are written with those milestone plans, not before.
 
 ---
@@ -39,7 +41,7 @@ Verdicts:
 | Verdict | Means |
 |---|---|
 | **PASS** | Observed result matches **Expected** |
-| **FAIL** | Observed result contradicts **Expected**. File a bug with procedure ID |
+| **FAIL** | Observed result contradicts **Expected**. Log it in [findings.md](./findings.md) with the procedure ID |
 | **BLOCKED** | Could not execute (lab down, missing fixture). Not a product fail |
 | **WAIVED** | Procedure skipped with a written reason (out of env, named hole) |
 
