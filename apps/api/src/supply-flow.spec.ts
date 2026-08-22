@@ -164,7 +164,12 @@ describe('M2 supply loop', () => {
       const register = await mailApp.request('/auth/register', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.60' },
-        body: JSON.stringify({ email, password: 'long-enough-password', role: 'provider', locale: 'he' }),
+        body: JSON.stringify({
+          email,
+          password: 'long-enough-password',
+          role: 'provider',
+          locale: 'he',
+        }),
       });
       const session = cookie(register);
       await upload(mailApp, session, 'government_id', 'id.png');

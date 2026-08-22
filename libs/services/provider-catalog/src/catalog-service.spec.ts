@@ -206,7 +206,9 @@ describe('CatalogService notifications (M2-T02 regression)', () => {
         providerEmail: 'provider@example.com',
         adminEmail: 'admin@shearly.local',
       }),
-    ).rejects.toMatchObject({ translationKey: 'catalog.missing:government_id,credential,portfolio' });
+    ).rejects.toMatchObject({
+      translationKey: 'catalog.missing:government_id,credential,portfolio',
+    });
     expect(sent).toHaveLength(0);
   });
 });
