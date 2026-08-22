@@ -35,6 +35,8 @@ export function createApp(services: AppServices = compose()) {
     authorizations: services.authorizations,
     ranker: services.ranker,
     config: services.config,
+    pool: services.pool,
+    ledger: services.ledger,
   });
   const bookingProvider = createBookingProviderRoutes({
     identity: services.identity,

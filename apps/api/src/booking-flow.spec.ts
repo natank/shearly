@@ -15,6 +15,21 @@ function cookie(res: Response): string {
   return (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
 }
 
+// Every registration/sign-in needs a distinct source IP — identity's
+// rate limiter (design §6.7) is keyed by IP, and multiple spec files share
+// the same auth_rate_limits table within one test run. A per-file counter
+// isn't enough (file A's and file B's counters both start at 1) — draw from
+// crypto.randomUUID() instead, giving each call one of 2^24 addresses so
+// cross-file collisions within a single 60s rate-limit window are
+// statistically negligible even with hundreds of calls across the suite.
+function uniqueIp(): string {
+  const bytes = crypto.randomUUID().replace(/-/g, '');
+  const a = parseInt(bytes.slice(0, 2), 16);
+  const b = parseInt(bytes.slice(2, 4), 16);
+  const c = parseInt(bytes.slice(4, 6), 16);
+  return `10.${a}.${b}.${c}`;
+}
+
 /** 2 days out: within the default 6-day auth_horizon, so the "authorize" (not "setup") path runs. */
 function nearFutureSlot(hour: number): string {
   const date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
@@ -65,7 +80,7 @@ async function seedListedProvider(
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-forwarded-for': `203.0.113.${Math.floor(Math.random() * 200) + 1}`,
+      'x-forwarded-for': uniqueIp(),
     },
     body: JSON.stringify({
       email,
@@ -89,7 +104,7 @@ async function seedListedProvider(
 
   const adminSignIn = await app.request('/auth/sign-in', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.90' },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': uniqueIp() },
     body: JSON.stringify({
       email: services.config.adminSeedEmail,
       password: services.config.adminSeedPassword,
@@ -150,7 +165,7 @@ async function registerCustomer(app: ReturnType<typeof createApp>) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-forwarded-for': `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+      'x-forwarded-for': uniqueIp(),
     },
     body: JSON.stringify({
       email,

@@ -53,6 +53,25 @@ describe('module boundaries', () => {
     expect(result.stderr).toContain('margin-left');
   });
 
+  it('provider PENDING booking payload never sources street or access-notes fields (NFR-SEC-005)', () => {
+    const file = join(repoRoot, 'apps/api/src/booking-provider-routes.ts');
+    const text = readFileSync(file, 'utf8');
+    const pendingBranchMatch = text.match(
+      /if \(booking\.state === 'PENDING'\) \{([\s\S]*?)\n\s*\}\n\s*return/,
+    );
+    expect(
+      pendingBranchMatch,
+      'expected a PENDING-state branch in the provider-view route',
+    ).not.toBeNull();
+    const pendingBranch = pendingBranchMatch?.[1] ?? '';
+    for (const forbidden of ['address_line', 'access_notes', 'fullAddress', 'accessNotes']) {
+      expect(
+        pendingBranch.includes(forbidden),
+        `PENDING branch must not reference ${forbidden}`,
+      ).toBe(false);
+    }
+  });
+
   it('keeps type:domain free of shared, service, and ui imports', () => {
     const domainRoot = join(repoRoot, 'libs/domain');
     const forbidden = [
