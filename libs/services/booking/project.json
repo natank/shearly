@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/services/booking/src",
   "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/services/booking/vitest.config.ts"
+      }
+    }
+  },
   "tags": ["type:service"]
 }

@@ -3,9 +3,13 @@
   "compilerOptions": {
     "outDir": "../../../dist/out-tsc/libs/services/booking",
     "rootDir": "src",
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     "declaration": true,
     "composite": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../shared/errors" },
+    { "path": "../../domain/booking-state-machine" }
+  ]
 }

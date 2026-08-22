@@ -28,6 +28,7 @@
       "@shearly/services-availability": ["libs/services/availability/src/index.ts"],
       "@shearly/services-availability/migrate": ["libs/services/availability/src/migrate.ts"],
       "@shearly/services-booking": ["libs/services/booking/src/index.ts"],
+      "@shearly/services-booking/migrate": ["libs/services/booking/src/migrate.ts"],
       "@shearly/services-payments": ["libs/services/payments/src/index.ts"],
       "@shearly/services-payments/migrate": ["libs/services/payments/src/migrate.ts"],
       "@shearly/services-notifications": ["libs/services/notifications/src/index.ts"],
