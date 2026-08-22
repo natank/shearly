@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import pg from 'pg';
 
 const api = 'http://127.0.0.1:4000';
 
@@ -86,7 +87,7 @@ async function seedListedProvider(request: APIRequestContext, name: string) {
   if (live.status() !== 200) {
     throw new Error(`go-live failed: ${live.status()} ${await live.text()}`);
   }
-  return { providerId: row.id, serviceId: service.service.id };
+  return { providerId: row.id, serviceId: service.service.id, providerSession: session };
 }
 
 test('anonymous visitor picks a slot, authenticates mid-flow, and lands back on the same confirm screen (CUS-001)', async ({
@@ -140,4 +141,74 @@ test('anonymous visitor picks a slot, authenticates mid-flow, and lands back on 
     timeout: 15_000,
   });
   await expect(page.getByText('PENDING')).toBeVisible();
+});
+
+test('a completed booking shows in account history and can be reviewed once (CUS-006, RAT-001)', async ({
+  page,
+  request,
+}) => {
+  const ip = uniqueIp();
+  await page.setExtraHTTPHeaders({ 'x-forwarded-for': ip });
+
+  const name = `E2E History ${Date.now()}`;
+  const { providerId, serviceId, providerSession } = await seedListedProvider(request, name);
+
+  // Register the customer through the browser's own request context so the
+  // resulting session cookie is already in page's cookie jar — no manual
+  // cookie copying needed for the page.goto('/en/account') below.
+  const customerEmail = `e2e-history-${Date.now()}@example.com`;
+  await page.request.post(`${api}/auth/register`, {
+    data: {
+      email: customerEmail,
+      password: 'long-enough-password',
+      role: 'customer',
+      locale: 'en',
+    },
+    headers: { 'x-forwarded-for': ip },
+  });
+
+  const slotStart = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  slotStart.setUTCHours(9, 0, 0, 0);
+  const created = await page.request.post(`${api}/bookings`, {
+    headers: { 'content-type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
+    data: {
+      providerId,
+      serviceId,
+      addressLine: 'e2e history street',
+      accessNotes: '',
+      lat: 32.0853,
+      lng: 34.7818,
+      slotStart: slotStart.toISOString(),
+      paymentMethodId: 'pm_test',
+    },
+  });
+  const booking = (await created.json()) as { id: string };
+
+  // Provider accepts, then the booking is completed. No live poller in M4
+  // (see M4 plan §7) — nudge slot_start into the past directly, the same
+  // frozen-clock trick apps/api's own booking-provider-flow.spec.ts uses.
+  await request.patch(`${api}/bookings/${booking.id}/accept`, {
+    headers: { cookie: providerSession },
+  });
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(
+      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
+      [booking.id],
+    );
+  } finally {
+    await pool.end();
+  }
+  const completeRes = await request.patch(`${api}/bookings/${booking.id}/complete`, {
+    headers: { cookie: providerSession },
+  });
+  expect(completeRes.status()).toBe(200);
+
+  await page.goto('/en/account');
+  await expect(page.getByText(`${name} — Cut`)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('COMPLETED')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Leave a review' }).click();
+  await page.getByRole('button', { name: 'Submit review' }).click();
+  await expect(page.getByRole('button', { name: 'Leave a review' })).toHaveCount(0);
 });

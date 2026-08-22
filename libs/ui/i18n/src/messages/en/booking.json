@@ -19,5 +19,14 @@
   "responseDeadline": "Provider responds by",
   "slotTaken": "That time was just taken",
   "slotTakenHint": "Someone else booked this slot a moment ago. Go back and pick another time.",
-  "confirmFailed": "We could not complete this booking. Try again."
+  "confirmFailed": "We could not complete this booking. Try again.",
+  "upcoming": "Upcoming",
+  "past": "Past",
+  "noUpcoming": "No upcoming bookings.",
+  "noPast": "No past bookings yet.",
+  "rating": "Rating",
+  "reviewBody": "Say more (optional)",
+  "leaveReview": "Leave a review",
+  "submitReview": "Submit review",
+  "reviewFailed": "We could not save your review. Try again."
 }
