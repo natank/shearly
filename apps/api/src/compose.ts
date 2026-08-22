@@ -3,7 +3,7 @@ import { loadConfig, type AppConfig } from '@shearly/shared-config';
 import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/services-identity';
 import { CatalogService, FsDocumentStore } from '@shearly/services-provider-catalog';
 import { AvailabilityService } from '@shearly/services-availability';
-import { ConnectService } from '@shearly/services-payments';
+import { AuthorizationService, ConnectService, LedgerService } from '@shearly/services-payments';
 import { DeterministicRanker, StubRanker, type ProviderRanker } from '@shearly/domain-ranking';
 
 export type AppServices = {
@@ -12,6 +12,8 @@ export type AppServices = {
   catalog: CatalogService;
   availability: AvailabilityService;
   payments: ConnectService;
+  authorizations: AuthorizationService;
+  ledger: LedgerService;
   ranker: ProviderRanker;
   pool: pg.Pool;
 };
@@ -45,6 +47,8 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
     ),
     availability: new AvailabilityService(pool, config.discoveryWindowDays),
     payments: new ConnectService(pool),
+    authorizations: new AuthorizationService(pool, config.stripeSecretKey, config.authHorizonDays),
+    ledger: new LedgerService(pool, config.commissionRate),
     ranker: createRanker(config),
   };
 }
