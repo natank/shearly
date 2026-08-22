@@ -2,7 +2,7 @@
 
 **Stage:** 4 of 4 (Implementation Plan)
 **Scope:** MVP only. Product Phase 2+ appears as a roadmap, not as build work.
-**Status:** M0–M3 complete on `main` (2026-08-15). Next: write `m4-transaction.md`. M5 plan not written.
+**Status:** M0–M3 complete on `main` (2026-08-15). M4 plan and QC STD written 2026-08-22, not yet implemented. M5 plan not written.
 **Source:** `docs/mvp/mvp-kickoff.md`, `docs/01-vision.md`, `docs/mvp/02-requirements.md`, `docs/mvp/03-design.md`
 
 This file is the **master plan**. Milestone plans live beside it and are the source of PR sequences. The master owns the cuts, the story map, and the MVP Definition of Done. A milestone plan may not add, drop, or move a story without updating §4–§5 here.
@@ -18,9 +18,9 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 | **M1** | [m1-accounts.md](./m1-accounts.md) | Accounts | Complete |
 | **M2** | [m2-supply.md](./m2-supply.md) | Supply | Complete |
 | **M3** | [m3-demand.md](./m3-demand.md) | Demand | Complete |
-| **M4** | `m4-transaction.md` | Transaction | Not written |
+| **M4** | [m4-transaction.md](./m4-transaction.md) | Transaction | Written, not yet implemented |
 | **M5** | `m5-operate-and-bar.md` | Operate & bar | Not written |
-| **QC** | [QC/](../QC/README.md) | Manual STD written when the milestone plan is accepted, before its PRs are implemented (QC/README.md §4) | M0–M3 written |
+| **QC** | [QC/](../QC/README.md) | Manual STD written when the milestone plan is accepted, before its PRs are implemented (QC/README.md §4) | M0–M4 written |
 
 ### Implementation progress
 
@@ -30,7 +30,7 @@ This file is the **master plan**. Milestone plans live beside it and are the sou
 | **M1** | [complete](./m1-accounts.md) | **Complete** — PRs [#16](https://github.com/natank/shearly/pull/16)–[#21](https://github.com/natank/shearly/pull/21) | CI green on each merge |
 | **M2** | [complete](./m2-supply.md) | **Complete** — PRs [#24](https://github.com/natank/shearly/pull/24)–[#30](https://github.com/natank/shearly/pull/30) | CI green on P5–P7; P3/P4 schema-race fixed in follow-ups |
 | **M3** | [complete](./m3-demand.md) | **Complete** — PRs [#36](https://github.com/natank/shearly/pull/36)–[#41](https://github.com/natank/shearly/pull/41) | CI green on each merge |
-| **M4** | not written | not started | — |
+| **M4** | [written](./m4-transaction.md) | not started | — |
 | **M5** | not written | not started | — |
 
 Stable IDs: milestone `M0`…`M5`; PRs inside a milestone plan `M0-P1`, `M0-P2`, …. Implementation PRs cite both (`M0-P3`, `NFR-CI-001`).
@@ -214,8 +214,8 @@ M0–M3 are sequential. M5 must not start until M4's money path is real. Do not 
 
 ### M4 — Transaction
 
-**Plan:** `m4-transaction.md` (not written)  
-**QC:** `docs/mvp/QC/std-m4-transaction.md` — write alongside plan acceptance, before M4-P1 starts (QC/README.md §4)
+**Plan:** [m4-transaction.md](./m4-transaction.md) — written, not yet implemented  
+**QC:** [std-m4-transaction.md](../QC/std-m4-transaction.md) — written
 
 **Goal.** The loop that is the demo: book, fund, accept, complete, cancel, decline. Money and occupancy are correct under concurrency.
 
@@ -326,4 +326,4 @@ RAG has no hook in M0–M5 beyond "do not design around it."
 
 ## 10. Next Step
 
-M0–M3 are shipped. Write [`m4-transaction.md`](./m4-transaction.md) next, accept it, then implement. Do not pre-write M5.
+M0–M3 are shipped. [`m4-transaction.md`](./m4-transaction.md) and its QC pair [`std-m4-transaction.md`](../QC/std-m4-transaction.md) are written — accept the plan, then implement `M4-P1`…`M4-P9` to exit. Run the STD on merged `main` and record PASS/FAIL before writing M5. Do not pre-write M5.
