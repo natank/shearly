@@ -192,6 +192,15 @@ export class IdentityService {
     return row ? toPublic(row) : null;
   }
 
+  async accountById(accountId: string): Promise<PublicAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `SELECT id, email, password_hash, role, locale FROM identity.accounts WHERE id = $1`,
+      [accountId],
+    );
+    const row = result.rows[0];
+    return row ? toPublic(row) : null;
+  }
+
   private async findByEmail(email: string): Promise<AccountRow | undefined> {
     const result = await this.pool.query<AccountRow>(
       `SELECT id, email, password_hash, role, locale
