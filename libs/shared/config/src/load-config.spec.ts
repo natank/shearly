@@ -23,5 +23,9 @@ describe('loadConfig', () => {
     expect(config.rankingImpl).toBe('deterministic');
     expect(config.rankWeightDistance).toBe(0.4);
     expect(config.newProviderReviewThreshold).toBe(3);
+    expect(config.authHorizonDays).toBe(6);
+    expect(config.bookingResponseWindowHours).toBe(2);
+    expect(config.autoCompleteWindowHours).toBe(2);
+    expect(config.cancelFullRefundHours).toBe(12);
   });
 });

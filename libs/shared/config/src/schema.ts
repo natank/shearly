@@ -32,6 +32,10 @@ export const envSchema = z.object({
   RANKING_IMPL: z.enum(['deterministic', 'stub']).default('deterministic'),
   RANKING_TIMEOUT_MS: z.coerce.number().int().positive().default(200),
   DISCOVERY_WINDOW_DAYS: z.coerce.number().int().positive().default(30),
+  AUTH_HORIZON_DAYS: z.coerce.number().positive().default(6),
+  BOOKING_RESPONSE_WINDOW_HOURS: z.coerce.number().positive().default(2),
+  AUTO_COMPLETE_WINDOW_HOURS: z.coerce.number().positive().default(2),
+  CANCEL_FULL_REFUND_HOURS: z.coerce.number().positive().default(12),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -68,6 +72,10 @@ export type AppConfig = {
   rankingImpl: 'deterministic' | 'stub';
   rankingTimeoutMs: number;
   discoveryWindowDays: number;
+  authHorizonDays: number;
+  bookingResponseWindowHours: number;
+  autoCompleteWindowHours: number;
+  cancelFullRefundHours: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -103,5 +111,9 @@ export function toAppConfig(env: Env): AppConfig {
     rankingImpl: env.RANKING_IMPL,
     rankingTimeoutMs: env.RANKING_TIMEOUT_MS,
     discoveryWindowDays: env.DISCOVERY_WINDOW_DAYS,
+    authHorizonDays: env.AUTH_HORIZON_DAYS,
+    bookingResponseWindowHours: env.BOOKING_RESPONSE_WINDOW_HOURS,
+    autoCompleteWindowHours: env.AUTO_COMPLETE_WINDOW_HOURS,
+    cancelFullRefundHours: env.CANCEL_FULL_REFUND_HOURS,
   };
 }
