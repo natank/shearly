@@ -95,4 +95,40 @@ describe('catalog HTTP', () => {
     expect(body.profile.baseLng).toBeCloseTo(34.78);
     expect(body.profile.radiusKm).toBe(10);
   });
+
+  it('404s malformed ids on admin vetting routes instead of crashing (M3-T09 regression)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    await services.identity.ensureAdmin(
+      services.config.adminSeedEmail,
+      services.config.adminSeedPassword,
+    );
+    const adminSignIn = await app.request('/auth/sign-in', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.70' },
+      body: JSON.stringify({
+        email: services.config.adminSeedEmail,
+        password: services.config.adminSeedPassword,
+      }),
+    });
+    const admin = cookie(adminSignIn);
+
+    const getProvider = await app.request('/admin/vetting/not-a-uuid', {
+      headers: { cookie: admin },
+    });
+    expect(getProvider.status).toBe(404);
+
+    const getDoc = await app.request('/admin/vetting/not-a-uuid/documents/also-not-a-uuid', {
+      headers: { cookie: admin },
+    });
+    expect(getDoc.status).toBe(404);
+
+    const decision = await app.request('/admin/vetting/not-a-uuid/decision', {
+      method: 'POST',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    expect(decision.status).toBe(404);
+  });
 });

@@ -120,4 +120,29 @@ describe('public catalog', () => {
     expect(slots.status).toBe(200);
     expect(Array.isArray(((await slots.json()) as { slots: unknown[] }).slots)).toBe(true);
   });
+
+  it('404s malformed ids instead of crashing (M3-T09 regression)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const live = await seed(true);
+
+    const malformedProvider = await app.request('/catalog/public/234243423243');
+    expect(malformedProvider.status).toBe(404);
+
+    const malformedSlotsProvider = await app.request(
+      `/catalog/public/not-a-uuid/services/${live.serviceId}/slots`,
+    );
+    expect(malformedSlotsProvider.status).toBe(404);
+
+    const malformedSlotsService = await app.request(
+      `/catalog/public/${live.providerId}/services/not-a-uuid/slots`,
+    );
+    expect(malformedSlotsService.status).toBe(404);
+
+    const malformedPortfolioDoc = await app.request(
+      `/catalog/public/${live.providerId}/portfolio/not-a-uuid`,
+    );
+    expect(malformedPortfolioDoc.status).toBe(404);
+  });
 });
