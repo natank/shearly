@@ -551,6 +551,57 @@ describe('AuthorizationService', () => {
     }
   });
 
+  it('rekeyToBooking moves the authorization from the attempt id to the real booking id', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (M4-P3)');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingAttemptId = crypto.randomUUID();
+    const realBookingId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId: bookingAttemptId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+
+      await svc.rekeyToBooking(bookingAttemptId, realBookingId);
+
+      const beforeRow = await pool.query(
+        'SELECT * FROM payments.authorizations WHERE booking_id = $1',
+        [bookingAttemptId],
+      );
+      expect(beforeRow.rowCount).toBe(0);
+
+      const afterRow = await pool.query(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [realBookingId],
+      );
+      expect(afterRow.rows[0]?.status).toBe('AUTHORIZED');
+
+      // capture now resolves against the real booking id.
+      await svc.capture(realBookingId, 20000);
+      expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [
+        realBookingId,
+      ]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingAttemptId]);
+      await pool.end();
+    }
+  });
+
   it('cancelAuthorization is idempotent and cancels the PaymentIntent', async () => {
     if (!url) {
       if (process.env.CI) {

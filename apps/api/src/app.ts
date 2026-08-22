@@ -5,6 +5,7 @@ import { createAuthRoutes } from './auth-routes.js';
 import { createCatalogRoutes } from './catalog-routes.js';
 import { createAvailabilityRoutes } from './availability-routes.js';
 import { createDiscoveryRoutes } from './discovery-routes.js';
+import { createBookingRoutes } from './booking-routes.js';
 import { compose, type AppServices } from './compose.js';
 
 export function createApp(services: AppServices = compose()) {
@@ -25,6 +26,15 @@ export function createApp(services: AppServices = compose()) {
     ranker: services.ranker,
     config: services.config,
   });
+  const booking = createBookingRoutes({
+    identity: services.identity,
+    catalog: services.catalog,
+    availability: services.availability,
+    booking: services.booking,
+    authorizations: services.authorizations,
+    ranker: services.ranker,
+    config: services.config,
+  });
 
   app.get('/health', (c) => c.json({ ok: true }));
   app.route('/', auth);
@@ -35,6 +45,8 @@ export function createApp(services: AppServices = compose()) {
   app.route('/api', availability);
   app.route('/', discovery);
   app.route('/api', discovery);
+  app.route('/', booking);
+  app.route('/api', booking);
   app.onError((err, c) => {
     if (err instanceof AppError) {
       return c.json(toErrorBody(err), err.httpStatus as ContentfulStatusCode);

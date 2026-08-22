@@ -176,6 +176,20 @@ export class AuthorizationService {
     }
   }
 
+  /**
+   * The saga (design §8.4) authorizes before the booking row exists, so
+   * `payments.authorizations` is keyed by `bookingAttemptId` at authorize
+   * time. Once the booking insert succeeds, re-key the row to the real
+   * booking id so capture/refund/cancel — which all operate on the booking
+   * id — can find it. A no-op if already re-keyed (idempotent against retry).
+   */
+  async rekeyToBooking(bookingAttemptId: string, bookingId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE payments.authorizations SET booking_id = $2, updated_at = now() WHERE booking_id = $1`,
+      [bookingAttemptId, bookingId],
+    );
+  }
+
   /** Cancels an orphaned or declined authorization. Idempotent against retry. */
   async cancelAuthorization(bookingId: string, bookingAttemptId: string): Promise<void> {
     const key = `cancel:${bookingAttemptId}`;
