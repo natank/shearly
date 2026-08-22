@@ -1,14 +1,24 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
 import type { CatalogService, DocKind } from '@shearly/services-provider-catalog';
 import type { AvailabilityService } from '@shearly/services-availability';
 import type { ConnectService } from '@shearly/services-payments';
-import { ValidationError } from '@shearly/shared-errors';
+import { NotFoundError, ValidationError } from '@shearly/shared-errors';
 import { evaluateGoLive } from './go-live.js';
 import { requireAdmin, requireProvider } from './session.js';
 
 const kinds = new Set<DocKind>(['government_id', 'credential', 'portfolio']);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function requireUuidParam(c: Context, name: string): string {
+  const value = c.req.param(name);
+  if (!value || !UUID_RE.test(value)) {
+    throw new NotFoundError('catalog.providerNotFound');
+  }
+  return value;
+}
 
 export function createCatalogRoutes(
   identity: IdentityService,
@@ -99,7 +109,8 @@ export function createCatalogRoutes(
 
   routes.get('/catalog/me/services/:id/quote', async (c) => {
     const account = await requireProvider(c, identity, config);
-    return c.json({ quote: await catalog.quoteService(account.id, c.req.param('id')) });
+    const serviceId = requireUuidParam(c, 'id');
+    return c.json({ quote: await catalog.quoteService(account.id, serviceId) });
   });
 
   routes.post('/catalog/me/submit', async (c) => {
@@ -172,7 +183,8 @@ export function createCatalogRoutes(
   });
 
   routes.get('/catalog/public/:providerId', async (c) => {
-    const provider = await catalog.requirePublic(c.req.param('providerId'));
+    const providerId = requireUuidParam(c, 'providerId');
+    const provider = await catalog.requirePublic(providerId);
     const application = await catalog.application(provider.account_id);
     const services = await catalog.listServicesForProvider(provider.id);
     const reviews = await catalog.listReviews(provider.id);
@@ -235,9 +247,11 @@ export function createCatalogRoutes(
   });
 
   routes.get('/catalog/public/:providerId/services/:serviceId/slots', async (c) => {
-    const provider = await catalog.requirePublic(c.req.param('providerId'));
+    const providerId = requireUuidParam(c, 'providerId');
+    const serviceId = requireUuidParam(c, 'serviceId');
+    const provider = await catalog.requirePublic(providerId);
     const services = await catalog.listServicesForProvider(provider.id);
-    const service = services.find((row) => row.id === c.req.param('serviceId'));
+    const service = services.find((row) => row.id === serviceId);
     if (!service || !extras) {
       return c.json({ error: 'NOT_FOUND', translationKey: 'catalog.serviceNotFound' }, 404);
     }
@@ -260,7 +274,9 @@ export function createCatalogRoutes(
   });
 
   routes.get('/catalog/public/:providerId/portfolio/:docId', async (c) => {
-    const file = await catalog.readPublicPortfolio(c.req.param('providerId'), c.req.param('docId'));
+    const providerId = requireUuidParam(c, 'providerId');
+    const docId = requireUuidParam(c, 'docId');
+    const file = await catalog.readPublicPortfolio(providerId, docId);
     return new Response(file.bytes, {
       headers: {
         'content-type': file.contentType,
@@ -276,7 +292,8 @@ export function createCatalogRoutes(
 
   routes.get('/admin/vetting/:providerId', async (c) => {
     await requireAdmin(c, identity, config);
-    const provider = await catalog.getById(c.req.param('providerId'));
+    const providerId = requireUuidParam(c, 'providerId');
+    const provider = await catalog.getById(providerId);
     if (!provider) {
       return c.json({ error: 'NOT_FOUND', translationKey: 'catalog.providerNotFound' }, 404);
     }
@@ -290,11 +307,9 @@ export function createCatalogRoutes(
 
   routes.get('/admin/vetting/:providerId/documents/:docId', async (c) => {
     const admin = await requireAdmin(c, identity, config);
-    const file = await catalog.readDocument(
-      admin.id,
-      c.req.param('providerId'),
-      c.req.param('docId'),
-    );
+    const providerId = requireUuidParam(c, 'providerId');
+    const docId = requireUuidParam(c, 'docId');
+    const file = await catalog.readDocument(admin.id, providerId, docId);
     return new Response(file.bytes, {
       headers: {
         'content-type': file.contentType,
@@ -312,11 +327,12 @@ export function createCatalogRoutes(
     if (!body?.action) {
       throw new ValidationError('errors.validation');
     }
-    const target = await catalog.getById(c.req.param('providerId'));
+    const providerId = requireUuidParam(c, 'providerId');
+    const target = await catalog.getById(providerId);
     const targetAccount = target ? await identity.accountById(target.account_id) : null;
     const provider = await catalog.decide(
       admin.id,
-      c.req.param('providerId'),
+      providerId,
       body.action,
       body.rationale,
       targetAccount ? { providerEmail: targetAccount.email } : undefined,
