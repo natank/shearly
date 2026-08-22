@@ -520,7 +520,7 @@ describe('AuthorizationService', () => {
     }
   });
 
-  it('throws ExternalServiceError when Stripe is not configured', async () => {
+  it('stubs authorize/capture/refund/cancel when Stripe is not configured (local dev, demo, E2E)', async () => {
     if (!url) {
       if (process.env.CI) {
         throw new Error('DATABASE_URL must be set in CI (M4-P2)');
@@ -530,23 +530,47 @@ describe('AuthorizationService', () => {
     await migratePayments(url);
     const pool = new pg.Pool({ connectionString: url });
     const svc = new AuthorizationService(pool, '', 6);
+    expect(svc.isStubbed()).toBe(true);
     const bookingId = crypto.randomUUID();
     const bookingAttemptId = crypto.randomUUID();
     try {
-      await expect(
-        svc.authorizeOrSetup(
-          {
-            bookingId,
-            bookingAttemptId,
-            amountMinor: 20000,
-            currency: 'ILS',
-            slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          },
-          'pm_test',
-        ),
-      ).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
+      const result = await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      expect(result.status).toBe('AUTHORIZED');
+      if (result.status === 'AUTHORIZED') {
+        expect(result.stripePaymentIntentId).toMatch(/^pi_stub_/);
+      }
+
+      await svc.capture(bookingId, 20000);
+      await svc.refund(bookingId, 10000, 'late_cancel');
+      await svc.cancelAuthorization(bookingId, bookingAttemptId);
     } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('isStubbed is false when a Stripe client is provided', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (M4-P2)');
+      }
+      return;
+    }
+    const pool = new pg.Pool({ connectionString: url });
+    const svc = new AuthorizationService(pool, fakeStripe(), 6);
+    try {
+      expect(svc.isStubbed()).toBe(false);
+    } finally {
       await pool.end();
     }
   });

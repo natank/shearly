@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     '@shearly/feature-account',
     '@shearly/feature-provider',
     '@shearly/feature-discovery',
+    '@shearly/feature-booking',
   ],
   async rewrites() {
     return [{ source: '/api/:path*', destination: 'http://127.0.0.1:4000/api/:path*' }];

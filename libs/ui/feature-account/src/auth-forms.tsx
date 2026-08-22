@@ -6,6 +6,18 @@ import { Button, Input } from '@shearly/ui-design-system';
 import type { PublicAccount, RegisterRole } from '@shearly/contracts-identity';
 import { homePathForRole } from './paths';
 
+/** CUS-001 mid-flow auth: honors ?next=<path> so a guest returning from a
+ * booking-draft redirect lands back on that page, not the role home. Only
+ * an app-relative path is accepted — never an absolute URL — so this can't
+ * be used as an open redirect. */
+function nextPath(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
+
 async function readJson(res: Response) {
   return (await res.json()) as { ok?: boolean; translationKey?: string; account?: PublicAccount };
 }
@@ -36,7 +48,7 @@ export function RegisterForm() {
     const me = await fetch('/api/me', { credentials: 'include' });
     if (me.ok) {
       const session = (await me.json()) as { account: PublicAccount };
-      window.location.href = `/${locale}${homePathForRole(session.account.role)}`;
+      window.location.href = nextPath() ?? `/${locale}${homePathForRole(session.account.role)}`;
       return;
     }
     setErrorKey(body.translationKey ?? 'auth.registerAccepted');
@@ -112,7 +124,7 @@ export function SignInForm({ adminOnly = false }: { adminOnly?: boolean }) {
       return;
     }
     if (session.account && !adminOnly) {
-      window.location.href = `/${locale}${homePathForRole(session.account.role)}`;
+      window.location.href = nextPath() ?? `/${locale}${homePathForRole(session.account.role)}`;
       return;
     }
     window.location.href = `/${locale}`;

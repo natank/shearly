@@ -11,6 +11,7 @@ const config: Config = {
     '../../libs/ui/feature-account/src/**/*.{ts,tsx}',
     '../../libs/ui/feature-provider/src/**/*.{ts,tsx}',
     '../../libs/ui/feature-discovery/src/**/*.{ts,tsx}',
+    '../../libs/ui/feature-booking/src/**/*.{ts,tsx}',
   ],
 };
 

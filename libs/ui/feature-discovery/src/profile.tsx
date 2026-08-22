@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Button } from '@shearly/ui-design-system';
 
 type Profile = {
   provider: { displayName: string; bio: string };
@@ -91,18 +90,22 @@ export function DiscoveryProfile({ providerId }: { providerId: string }) {
       </section>
       <section className="flex flex-col gap-3 rounded-md border border-input bg-background p-4">
         <h2 className="text-base font-medium">{t('slots')}</h2>
-        {profile.nextSlots.length ? (
+        {profile.nextSlots.length && profile.services[0] ? (
           <ul className="flex flex-col gap-1 text-sm">
             {profile.nextSlots.map((slot) => (
-              <li key={slot.start}>{formatSlot(slot.start, locale)}</li>
+              <li key={slot.start}>
+                <a
+                  className="underline"
+                  href={`/${locale}/book/${providerId}/${profile.services[0].id}?slotStart=${encodeURIComponent(slot.start)}`}
+                >
+                  {formatSlot(slot.start, locale)}
+                </a>
+              </li>
             ))}
           </ul>
         ) : (
           <p className="text-sm">{t('noSlots')}</p>
         )}
-        <Button type="button" disabled>
-          {t('bookLater')}
-        </Button>
       </section>
       <section className="flex flex-col gap-3 rounded-md border border-input bg-background p-4">
         <h2 className="text-base font-medium">{t('reviews')}</h2>

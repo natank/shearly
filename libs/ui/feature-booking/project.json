@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/ui/feature-booking/src",
   "projectType": "library",
-  "tags": ["type:feature"]
+  "tags": ["type:feature"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/ui/feature-booking/vitest.config.ts"
+      }
+    }
+  }
 }
