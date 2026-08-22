@@ -28,7 +28,6 @@ function uniqueIp(): string {
   return `10.${a}.${b}.${c}`;
 }
 
-/** 2 days out: within the default 6-day auth_horizon, so the "authorize" (not "setup") path runs. */
 function nearFutureSlot(hour: number): string {
   const date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
   date.setUTCHours(hour, 0, 0, 0);
@@ -206,7 +205,7 @@ async function createBooking(
   return (await res.json()) as { id: string; state: string };
 }
 
-describe('M4 provider actions on bookings', () => {
+describe('M4 customer cancel', () => {
   const stripe = fakeStripe();
   const services = url ? compose(undefined, async () => undefined, { stripeClient: stripe }) : null;
   const app = services ? createApp(services) : null;
@@ -214,7 +213,7 @@ describe('M4 provider actions on bookings', () => {
   beforeAll(async () => {
     if (!url || !services) {
       if (process.env.CI) {
-        throw new Error('DATABASE_URL must be set in CI (M4-P4)');
+        throw new Error('DATABASE_URL must be set in CI (M4-P5)');
       }
       return;
     }
@@ -233,152 +232,161 @@ describe('M4 provider actions on bookings', () => {
     await services?.pool.end();
   });
 
-  it('accept reveals full address; PENDING never did (BOK-003, NFR-SEC-005)', async () => {
+  it('PENDING cancel never charges regardless of timing', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const customer = await registerCustomer(app);
+    const booking = await createBooking(app, customer, providerId, serviceId, 9);
+
+    const consequence = await app.request(`/bookings/${booking.id}/cancel-consequence`, {
+      headers: { cookie: customer },
+    });
+    expect(await consequence.json()).toEqual({ kind: 'no_charge' });
+
+    const cancel = await app.request(`/bookings/${booking.id}/cancel`, {
+      method: 'PATCH',
+      headers: { cookie: customer },
+    });
+    expect(cancel.status).toBe(200);
+    expect((await cancel.json()) as { state: string }).toMatchObject({
+      state: 'CANCELLED_BY_CUSTOMER',
+    });
+    expect(stripe.paymentIntents.cancel).toHaveBeenCalled();
+  });
+
+  it('CONFIRMED cancel more than 12h out: no charge, disclosed before confirming', async () => {
     if (!app || !services) {
       return;
     }
     const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
     const customer = await registerCustomer(app);
     const booking = await createBooking(app, customer, providerId, serviceId, 9);
-
-    const pendingView = await app.request(`/bookings/${booking.id}/provider-view`, {
-      headers: { cookie: providerSession },
-    });
-    const pendingBody = (await pendingView.json()) as Record<string, unknown>;
-    expect(pendingBody.fullAddress).toBeUndefined();
-    expect(pendingBody.accessNotes).toBeUndefined();
-    expect(JSON.stringify(pendingBody)).not.toContain('qc-m4 street 1');
-
-    const accept = await app.request(`/bookings/${booking.id}/accept`, {
-      method: 'PATCH',
-      headers: { cookie: providerSession },
-    });
-    expect(accept.status).toBe(200);
-    expect((await accept.json()) as { state: string }).toMatchObject({ state: 'CONFIRMED' });
-
-    const confirmedView = await app.request(`/bookings/${booking.id}/provider-view`, {
-      headers: { cookie: providerSession },
-    });
-    const confirmedBody = (await confirmedView.json()) as {
-      fullAddress: string;
-      accessNotes: string;
-    };
-    expect(confirmedBody.fullAddress).toBe('qc-m4 street 1');
-    expect(confirmedBody.accessNotes).toBe('gate 2');
-  });
-
-  it('decline releases the authorization and frees the slot (BOK-003)', async () => {
-    if (!app || !services) {
-      return;
-    }
-    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
-    const customer = await registerCustomer(app);
-    const booking = await createBooking(app, customer, providerId, serviceId, 10);
-
-    const decline = await app.request(`/bookings/${booking.id}/decline`, {
-      method: 'PATCH',
-      headers: { cookie: providerSession, 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'too far' }),
-    });
-    expect(decline.status).toBe(200);
-    expect((await decline.json()) as { state: string }).toMatchObject({ state: 'DECLINED' });
-    expect(stripe.paymentIntents.cancel).toHaveBeenCalled();
-
-    // The same slot is bookable again by a different customer.
-    const secondCustomer = await registerCustomer(app);
-    const rebooked = await createBooking(app, secondCustomer, providerId, serviceId, 10);
-    expect(rebooked.state).toBe('PENDING');
-  });
-
-  it('complete captures and splits gross/commission/net (BOK-007, PAY-002)', async () => {
-    if (!app || !services) {
-      return;
-    }
-    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
-    const customer = await registerCustomer(app);
-    const booking = await createBooking(app, customer, providerId, serviceId, 11);
-
     await app.request(`/bookings/${booking.id}/accept`, {
       method: 'PATCH',
       headers: { cookie: providerSession },
     });
 
-    // Complete before slot_start must be rejected (guard in transition()).
-    const tooEarly = await app.request(`/bookings/${booking.id}/complete`, {
-      method: 'PATCH',
-      headers: { cookie: providerSession },
+    // slot_start is already 2 days out (well past 12h) via nearFutureSlot.
+    const consequence = await app.request(`/bookings/${booking.id}/cancel-consequence`, {
+      headers: { cookie: customer },
     });
-    expect(tooEarly.status).toBe(409);
+    expect(await consequence.json()).toEqual({ kind: 'no_charge' });
 
-    // Advance the booking's slot_start into the past directly (no live clock
-    // control in M4 — see M4 plan's frozen-clock note) so complete succeeds.
-    await services.pool.query(
-      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
-      [booking.id],
-    );
-
-    const complete = await app.request(`/bookings/${booking.id}/complete`, {
+    const cancel = await app.request(`/bookings/${booking.id}/cancel`, {
       method: 'PATCH',
-      headers: { cookie: providerSession },
+      headers: { cookie: customer },
     });
-    expect(complete.status).toBe(200);
-    expect((await complete.json()) as { state: string }).toMatchObject({ state: 'COMPLETED' });
-
-    const ledger = await services.ledger.entriesForBooking(booking.id);
-    expect(ledger).toEqual([
-      { kind: 'gross', amountMinor: 20000 },
-      { kind: 'commission', amountMinor: 4000 },
-      { kind: 'net', amountMinor: 16000 },
-    ]);
-    expect(stripe.paymentIntents.capture).toHaveBeenCalled();
+    expect((await cancel.json()) as { state: string }).toMatchObject({
+      state: 'CANCELLED_BY_CUSTOMER',
+    });
   });
 
-  it("provider cannot action another provider's booking", async () => {
-    if (!app || !services) {
-      return;
-    }
-    const { providerId, serviceId } = await seedListedProvider(app, services);
-    const { providerSession: strangerSession } = await seedListedProvider(app, services);
-    const customer = await registerCustomer(app);
-    const booking = await createBooking(app, customer, providerId, serviceId, 12);
-
-    const res = await app.request(`/bookings/${booking.id}/accept`, {
-      method: 'PATCH',
-      headers: { cookie: strangerSession },
-    });
-    expect(res.status).toBe(403);
-  });
-
-  it('customer no-show captures in full; provider no-show refunds in full (BOK-008)', async () => {
+  it('CONFIRMED cancel inside 12h: disclosed 50% charge matches the actual charge (`[D-3]`)', async () => {
     if (!app || !services) {
       return;
     }
     const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const customer = await registerCustomer(app);
+    const booking = await createBooking(app, customer, providerId, serviceId, 9);
+    await app.request(`/bookings/${booking.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
 
-    const custNoShowCustomer = await registerCustomer(app);
-    const custNoShowBooking = await createBooking(
-      app,
-      custNoShowCustomer,
-      providerId,
-      serviceId,
-      13,
-    );
-    await app.request(`/bookings/${custNoShowBooking.id}/accept`, {
-      method: 'PATCH',
-      headers: { cookie: providerSession },
-    });
+    // Move slot_start to 6h out — inside the 12h full-refund window.
     await services.pool.query(
-      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
-      [custNoShowBooking.id],
+      `UPDATE booking.bookings SET slot_start = now() + interval '6 hours' WHERE id = $1`,
+      [booking.id],
     );
-    const noShow = await app.request(`/bookings/${custNoShowBooking.id}/no-show`, {
+
+    const consequence = await app.request(`/bookings/${booking.id}/cancel-consequence`, {
+      headers: { cookie: customer },
+    });
+    expect(await consequence.json()).toEqual({ kind: 'partial_charge', chargePct: 50 });
+
+    const cancel = await app.request(`/bookings/${booking.id}/cancel`, {
+      method: 'PATCH',
+      headers: { cookie: customer },
+    });
+    expect((await cancel.json()) as { state: string }).toMatchObject({
+      state: 'CANCELLED_BY_CUSTOMER',
+    });
+
+    const ledger = await services.ledger.entriesForBooking(booking.id);
+    expect(ledger).toEqual([
+      { kind: 'gross', amountMinor: 10000 },
+      { kind: 'commission', amountMinor: 2000 },
+      { kind: 'net', amountMinor: 8000 },
+    ]);
+    expect(stripe.paymentIntents.capture).toHaveBeenCalledWith(
+      expect.any(String),
+      { amount_to_capture: 10000 },
+      expect.objectContaining({ idempotencyKey: expect.stringContaining('capture:') }),
+    );
+  });
+
+  it('just inside the 12h boundary charges 50%, not full refund', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const customer = await registerCustomer(app);
+    const booking = await createBooking(app, customer, providerId, serviceId, 9);
+    await app.request(`/bookings/${booking.id}/accept`, {
       method: 'PATCH',
       headers: { cookie: providerSession },
     });
-    expect(noShow.status).toBe(200);
-    expect((await noShow.json()) as { state: string }).toMatchObject({
-      state: 'NO_SHOW_CUSTOMER',
+
+    // A fixed offset computed once from Node's own clock, well clear of any
+    // cross-process (app vs Postgres) clock skew — the true zero-margin
+    // boundary is already covered deterministically at the domain level in
+    // libs/domain/booking-state-machine (frozen clock, no wall-clock race).
+    const slotStart = new Date(Date.now() + 11.5 * 60 * 60 * 1000);
+    await services.pool.query(`UPDATE booking.bookings SET slot_start = $2 WHERE id = $1`, [
+      booking.id,
+      slotStart,
+    ]);
+
+    const consequence = await app.request(`/bookings/${booking.id}/cancel-consequence`, {
+      headers: { cookie: customer },
     });
-    expect(stripe.paymentIntents.capture).toHaveBeenCalled();
+    expect(await consequence.json()).toEqual({ kind: 'partial_charge', chargePct: 50 });
+  });
+
+  it('cross-tenant cancel is rejected', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const owner = await registerCustomer(app);
+    const stranger = await registerCustomer(app);
+    const booking = await createBooking(app, owner, providerId, serviceId, 9);
+
+    const res = await app.request(`/bookings/${booking.id}/cancel`, {
+      method: 'PATCH',
+      headers: { cookie: stranger },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('cancelling an already-terminal booking is rejected, not silently accepted', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const customer = await registerCustomer(app);
+    const booking = await createBooking(app, customer, providerId, serviceId, 9);
+    await app.request(`/bookings/${booking.id}/cancel`, {
+      method: 'PATCH',
+      headers: { cookie: customer },
+    });
+
+    const secondCancel = await app.request(`/bookings/${booking.id}/cancel`, {
+      method: 'PATCH',
+      headers: { cookie: customer },
+    });
+    expect(secondCancel.status).toBe(409);
   });
 });

@@ -6,19 +6,29 @@ import type { AvailabilityService } from '@shearly/services-availability';
 import type { BookingService } from '@shearly/services-booking';
 import type { AuthorizationService } from '@shearly/services-payments';
 import type { ProviderRanker } from '@shearly/domain-ranking';
-import { AuthorizationError, ValidationError } from '@shearly/shared-errors';
+import { transition, TransitionError } from '@shearly/domain-booking-state-machine';
+import {
+  AuthorizationError,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '@shearly/shared-errors';
 import { requireCustomer } from './session.js';
 import { createBookingSaga } from './booking-saga.js';
+import { deriveCancelConsequence } from './cancel-consequence.js';
+import { executeEffects, type ExecuteEffectsDeps } from './booking-effects.js';
 
-export function createBookingRoutes(input: {
-  identity: IdentityService;
-  catalog: CatalogService;
-  availability: AvailabilityService;
-  booking: BookingService;
-  authorizations: AuthorizationService;
-  ranker: ProviderRanker;
-  config: AppConfig;
-}) {
+export function createBookingRoutes(
+  input: {
+    identity: IdentityService;
+    catalog: CatalogService;
+    availability: AvailabilityService;
+    booking: BookingService;
+    authorizations: AuthorizationService;
+    ranker: ProviderRanker;
+    config: AppConfig;
+  } & ExecuteEffectsDeps,
+) {
   const routes = new Hono();
 
   routes.post('/bookings', async (c) => {
@@ -122,6 +132,65 @@ export function createBookingRoutes(input: {
       currency: booking.currency,
       responseDeadline: booking.response_deadline,
     });
+  });
+
+  async function requireOwnBooking(c: Parameters<typeof requireCustomer>[0]) {
+    const account = await requireCustomer(c, input.identity, input.config);
+    const bookingId = c.req.param('id');
+    if (!bookingId) {
+      throw new NotFoundError('booking.notFound');
+    }
+    const booking = await input.booking.requireById(bookingId);
+    if (booking.customer_id !== account.id) {
+      throw new AuthorizationError('errors.unauthorized');
+    }
+    return booking;
+  }
+
+  function transitionForCancel(booking: Awaited<ReturnType<typeof requireOwnBooking>>) {
+    try {
+      return transition(booking.state, 'CustomerCancels', {
+        clock: new Date(),
+        slotStart: booking.slot_start,
+        actor: 'customer',
+        cancelFullRefundHours: input.config.cancelFullRefundHours,
+      });
+    } catch (error) {
+      if (error instanceof TransitionError) {
+        throw new ConflictError(`booking.${error.code.toLowerCase()}`);
+      }
+      throw error;
+    }
+  }
+
+  // BOK-005: the exact financial consequence is stated before the customer
+  // confirms — never disclosed only afterward. Same transition() call the
+  // real cancel below uses, so the disclosed and charged amounts cannot
+  // drift (M4 plan §9 M4-Q2).
+  routes.get('/bookings/:id/cancel-consequence', async (c) => {
+    const booking = await requireOwnBooking(c);
+    const result = transitionForCancel(booking);
+    return c.json(deriveCancelConsequence(result.effects));
+  });
+
+  routes.patch('/bookings/:id/cancel', async (c) => {
+    const booking = await requireOwnBooking(c);
+    const result = transitionForCancel(booking);
+    const updated = await input.booking.applyTransition(
+      booking.id,
+      result.nextState,
+      'CustomerCancels',
+      'customer',
+    );
+    await executeEffects(
+      input,
+      booking.id,
+      booking.provider_id,
+      booking.price_minor,
+      'customer_cancel',
+      result.effects,
+    );
+    return c.json({ id: updated.id, state: updated.state });
   });
 
   return routes;
