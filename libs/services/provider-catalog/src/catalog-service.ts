@@ -381,6 +381,15 @@ export class CatalogService {
     return result.rows;
   }
 
+  async getServiceById(serviceId: string): Promise<ServiceRow | null> {
+    const result = await this.pool.query<ServiceRow>(
+      `SELECT id, provider_id, name, description, duration_minutes, price_minor
+       FROM catalog.services WHERE id = $1`,
+      [serviceId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async listPortfolioMeta(providerId: string): Promise<DocumentMeta[]> {
     const result = await this.pool.query<DocumentMeta>(
       `SELECT id, kind, original_name, content_type FROM catalog.vetting_documents

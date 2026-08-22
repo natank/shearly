@@ -4,6 +4,7 @@ import { createSmtpMailer, IdentityService, type SendMail } from '@shearly/servi
 import { CatalogService, FsDocumentStore } from '@shearly/services-provider-catalog';
 import { AvailabilityService } from '@shearly/services-availability';
 import { AuthorizationService, ConnectService, LedgerService } from '@shearly/services-payments';
+import { BookingService } from '@shearly/services-booking';
 import { DeterministicRanker, StubRanker, type ProviderRanker } from '@shearly/domain-ranking';
 
 export type AppServices = {
@@ -14,6 +15,7 @@ export type AppServices = {
   payments: ConnectService;
   authorizations: AuthorizationService;
   ledger: LedgerService;
+  booking: BookingService;
   ranker: ProviderRanker;
   pool: pg.Pool;
 };
@@ -31,7 +33,16 @@ export function createRanker(config: AppConfig): ProviderRanker {
   });
 }
 
-export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppServices {
+export type ComposeOverrides = {
+  /** Test-only: inject a fake Stripe client so saga tests don't need live Stripe test-mode credentials. */
+  stripeClient?: import('stripe').default;
+};
+
+export function compose(
+  source?: NodeJS.ProcessEnv,
+  sendMail?: SendMail,
+  overrides?: ComposeOverrides,
+): AppServices {
   const config = loadConfig(source);
   const pool = new pg.Pool({ connectionString: config.databaseUrl });
   return {
@@ -47,8 +58,13 @@ export function compose(source?: NodeJS.ProcessEnv, sendMail?: SendMail): AppSer
     ),
     availability: new AvailabilityService(pool, config.discoveryWindowDays),
     payments: new ConnectService(pool),
-    authorizations: new AuthorizationService(pool, config.stripeSecretKey, config.authHorizonDays),
+    authorizations: new AuthorizationService(
+      pool,
+      overrides?.stripeClient ?? config.stripeSecretKey,
+      config.authHorizonDays,
+    ),
     ledger: new LedgerService(pool, config.commissionRate),
+    booking: new BookingService(pool),
     ranker: createRanker(config),
   };
 }
