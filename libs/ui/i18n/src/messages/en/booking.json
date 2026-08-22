@@ -1,0 +1,23 @@
+{
+  "missingSlot": "Missing slot selection. Go back and pick a time.",
+  "confirmTitle": "Confirm your booking",
+  "address": "Address",
+  "addNewAddress": "Add a new address",
+  "addressLabelField": "Label (e.g. Home)",
+  "addressLineField": "Address",
+  "accessNotes": "Access notes (floor, entry code, parking)",
+  "saveAddress": "Save address",
+  "missingAddress": "Enter an address before confirming.",
+  "unknownAddress": "We could not find that address.",
+  "authRequired": "Sign in or create an account to confirm this booking.",
+  "signInToContinue": "Sign in",
+  "registerToContinue": "Create account",
+  "confirmAndPay": "Confirm and pay",
+  "confirmed": "Booking requested",
+  "state": "Status",
+  "total": "Total charged",
+  "responseDeadline": "Provider responds by",
+  "slotTaken": "That time was just taken",
+  "slotTakenHint": "Someone else booked this slot a moment ago. Go back and pick another time.",
+  "confirmFailed": "We could not complete this booking. Try again."
+}

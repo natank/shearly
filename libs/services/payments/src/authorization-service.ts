@@ -1,6 +1,6 @@
 import pg from 'pg';
 import Stripe from 'stripe';
-import { ExternalServiceError, PaymentError } from '@shearly/shared-errors';
+import { PaymentError } from '@shearly/shared-errors';
 
 export type OperationKind = 'authorize' | 'setup' | 'cancel' | 'capture' | 'refund';
 export type OperationState = 'pending' | 'succeeded' | 'failed';
@@ -40,11 +40,14 @@ export class AuthorizationService {
     }
   }
 
-  private requireStripe(): Stripe {
-    if (!this.stripe) {
-      throw new ExternalServiceError('errors.payments.stripeNotConfigured');
-    }
-    return this.stripe;
+  /**
+   * No `STRIPE_SECRET_KEY` configured: local dev, demo, and E2E still need a
+   * working booking loop (design §9.1's "no paid dependency" applies to
+   * Stripe the same way it does to the geocoder). Mirrors ConnectService's
+   * established stub pattern (M2) rather than failing the whole loop.
+   */
+  isStubbed(): boolean {
+    return this.stripe === null;
   }
 
   private async beginOperation(
@@ -106,26 +109,29 @@ export class AuthorizationService {
       throw new PaymentError('errors.payments.authorizationFailed');
     }
 
-    const stripe = this.requireStripe();
     try {
-      const intent = await stripe.paymentIntents.create(
-        {
-          amount: input.amountMinor,
-          currency: input.currency.toLowerCase(),
-          payment_method: paymentMethodId,
-          confirm: true,
-          capture_method: 'manual',
-          automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-        },
-        { idempotencyKey: key },
-      );
-      const result: AuthorizeResult = { status: 'AUTHORIZED', stripePaymentIntentId: intent.id };
+      const intentId = this.stripe
+        ? (
+            await this.stripe.paymentIntents.create(
+              {
+                amount: input.amountMinor,
+                currency: input.currency.toLowerCase(),
+                payment_method: paymentMethodId,
+                confirm: true,
+                capture_method: 'manual',
+                automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+              },
+              { idempotencyKey: key },
+            )
+          ).id
+        : `pi_stub_${key}`;
+      const result: AuthorizeResult = { status: 'AUTHORIZED', stripePaymentIntentId: intentId };
       await this.completeOperation(key, 'succeeded', result);
       await this.pool.query(
         `INSERT INTO payments.authorizations (booking_id, status, stripe_payment_intent_id)
          VALUES ($1, 'AUTHORIZED', $2)
          ON CONFLICT (booking_id) DO UPDATE SET status = 'AUTHORIZED', stripe_payment_intent_id = $2, updated_at = now()`,
-        [input.bookingId, intent.id],
+        [input.bookingId, intentId],
       );
       return result;
     } catch (error) {
@@ -144,22 +150,21 @@ export class AuthorizationService {
       throw new PaymentError('errors.payments.authorizationFailed');
     }
 
-    const stripe = this.requireStripe();
     const authorizeAfter = new Date(
       input.slotStart.getTime() - this.authHorizonDays * 24 * 60 * 60 * 1000,
     );
     try {
-      const intent = await stripe.setupIntents.create(
-        {
-          payment_method: paymentMethodId,
-          confirm: true,
-          usage: 'off_session',
-        },
-        { idempotencyKey: key },
-      );
+      const setupIntentId = this.stripe
+        ? (
+            await this.stripe.setupIntents.create(
+              { payment_method: paymentMethodId, confirm: true, usage: 'off_session' },
+              { idempotencyKey: key },
+            )
+          ).id
+        : `si_stub_${key}`;
       const result: AuthorizeResult = {
         status: 'SETUP_ONLY',
-        stripeSetupIntentId: intent.id,
+        stripeSetupIntentId: setupIntentId,
         authorizeAfter,
       };
       await this.completeOperation(key, 'succeeded', result);
@@ -167,7 +172,7 @@ export class AuthorizationService {
         `INSERT INTO payments.authorizations (booking_id, status, stripe_setup_intent_id, authorize_after)
          VALUES ($1, 'SETUP_ONLY', $2, $3)
          ON CONFLICT (booking_id) DO UPDATE SET status = 'SETUP_ONLY', stripe_setup_intent_id = $2, authorize_after = $3, updated_at = now()`,
-        [input.bookingId, intent.id, authorizeAfter],
+        [input.bookingId, setupIntentId, authorizeAfter],
       );
       return result;
     } catch (error) {
@@ -206,10 +211,9 @@ export class AuthorizationService {
       [bookingId],
     );
     const row = auth.rows[0];
-    const stripe = this.requireStripe();
     try {
-      if (row?.stripe_payment_intent_id) {
-        await stripe.paymentIntents.cancel(row.stripe_payment_intent_id, undefined, {
+      if (this.stripe && row?.stripe_payment_intent_id) {
+        await this.stripe.paymentIntents.cancel(row.stripe_payment_intent_id, undefined, {
           idempotencyKey: key,
         });
       }
@@ -238,13 +242,14 @@ export class AuthorizationService {
       throw new PaymentError('errors.payments.noAuthorization');
     }
 
-    const stripe = this.requireStripe();
     try {
-      await stripe.paymentIntents.capture(
-        paymentIntentId,
-        { amount_to_capture: amountMinor },
-        { idempotencyKey: key },
-      );
+      if (this.stripe) {
+        await this.stripe.paymentIntents.capture(
+          paymentIntentId,
+          { amount_to_capture: amountMinor },
+          { idempotencyKey: key },
+        );
+      }
       await this.completeOperation(key, 'succeeded', { amountMinor });
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
@@ -270,12 +275,13 @@ export class AuthorizationService {
       throw new PaymentError('errors.payments.noAuthorization');
     }
 
-    const stripe = this.requireStripe();
     try {
-      await stripe.refunds.create(
-        { payment_intent: paymentIntentId, amount: amountMinor },
-        { idempotencyKey: key },
-      );
+      if (this.stripe) {
+        await this.stripe.refunds.create(
+          { payment_intent: paymentIntentId, amount: amountMinor },
+          { idempotencyKey: key },
+        );
+      }
       await this.completeOperation(key, 'succeeded', { amountMinor, reason });
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });

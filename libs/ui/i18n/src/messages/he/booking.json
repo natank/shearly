@@ -1,0 +1,23 @@
+{
+  "missingSlot": "לא נבחר תור. חזרו ובחרו זמן.",
+  "confirmTitle": "אישור ההזמנה",
+  "address": "כתובת",
+  "addNewAddress": "הוספת כתובת חדשה",
+  "addressLabelField": "תווית (למשל: בית)",
+  "addressLineField": "כתובת",
+  "accessNotes": "הערות גישה (קומה, קוד כניסה, חניה)",
+  "saveAddress": "שמירת כתובת",
+  "missingAddress": "יש להזין כתובת לפני האישור.",
+  "unknownAddress": "לא מצאנו את הכתובת.",
+  "authRequired": "יש להתחבר או ליצור חשבון כדי לאשר את ההזמנה.",
+  "signInToContinue": "התחברות",
+  "registerToContinue": "יצירת חשבון",
+  "confirmAndPay": "אישור ותשלום",
+  "confirmed": "ההזמנה נשלחה",
+  "state": "סטטוס",
+  "total": "סכום לחיוב",
+  "responseDeadline": "נותן השירות ישיב עד",
+  "slotTaken": "התור הזה נתפס הרגע",
+  "slotTakenHint": "מישהו אחר הזמין את התור הזה לפני רגע. חזרו ובחרו זמן אחר.",
+  "confirmFailed": "לא הצלחנו להשלים את ההזמנה. נסו שוב."
+}

@@ -49,3 +49,13 @@ export async function loadAccountMessages(locale: Locale) {
       return (await import('./messages/en/account.json')).default;
   }
 }
+
+export async function loadBookingMessages(locale: Locale) {
+  switch (locale) {
+    case 'he':
+      return (await import('./messages/he/booking.json')).default;
+    case 'en':
+    default:
+      return (await import('./messages/en/booking.json')).default;
+  }
+}

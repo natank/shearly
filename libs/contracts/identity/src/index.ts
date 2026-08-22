@@ -32,6 +32,14 @@ export const guestDraftSchema = z.object({
   slotId: z.string().optional(),
   providerId: z.string().optional(),
   addressLabel: z.string().optional(),
+  // CUS-001 mid-flow auth (M4-P6): enough to restore POST /bookings without
+  // returning the visitor to the discovery start.
+  serviceId: z.string().optional(),
+  slotStart: z.string().optional(),
+  addressLine: z.string().optional(),
+  accessNotes: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 });
 
 export const publicAccountSchema = z.object({
