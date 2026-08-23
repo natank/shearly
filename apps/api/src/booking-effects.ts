@@ -60,8 +60,14 @@ export async function executeEffects(
       case 'ReleaseHold':
       case 'Notify':
         // ReleaseHold: no-op, see doc comment above.
-        // Notify: real dispatch is M5 (design §6.6); the call site exists so
-        // M5 only swaps the implementation, per the master plan's stated pattern.
+        // Notify: stays a no-op here by design (M5-P4) — BookingService's
+        // applyTransition()/create() (M5-P1) already write a
+        // BookingStateChanged row in the same transaction as every state
+        // change, for every transition the state machine returns Notify on.
+        // That write is what Notify actually becomes real: the outbox
+        // dispatcher (apps/api/src/notification-dispatcher.ts) picks it up
+        // and calls NotificationService — there is nothing left for this
+        // case to do.
         break;
       default:
         break;

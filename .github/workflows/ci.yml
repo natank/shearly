@@ -28,11 +28,22 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mailpit:
+        image: axllent/mailpit
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8025/api/v1/info || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       CI: true
       DATABASE_URL: postgres://shearly:shearly@localhost:5432/shearly
       GEOCODER_URL: http://127.0.0.1:3001
       SMTP_URL: smtp://127.0.0.1:1025
+      MAILPIT_API_URL: http://127.0.0.1:8025
     steps:
       - name: Checkout
         uses: actions/checkout@v4
