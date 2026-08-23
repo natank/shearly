@@ -1,0 +1,182 @@
+# M4 STD — Test Environment & Fixtures
+
+Prepared for running [`std-m4-transaction.md`](./std-m4-transaction.md) against a freshly reset local stack.
+
+**Prepared:** 2026-08-23
+**Stripe mode:** **real test mode**, switched over mid-run at your request. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` are set in `.env` against your Stripe test account (`acct_1U4Ti2Io9Lm5593Y`), and `stripe listen --forward-to localhost:4000/webhooks/stripe` is running in the background (started 2026-08-23 09:31, PID may have changed if you restarted it). Real `pi_...`/`evt_...` IDs now, not `pi_stub_*`. §6 (below) is stale as of this switch — its "known deviations" no longer apply except where noted.
+**Bookings created before the switch** (the T04–T10b fixtures in §3, all seeded before 09:31) are still stub-mode (`pi_stub_*` authorizations) — that's fine, they don't need real Stripe objects to exercise their specific STD procedures (accept/decline/cancel/complete/no-show all operate on `payments.authorizations`/`payments.ledger` rows regardless of stub-vs-real). Only bookings created **after** the switch get real Stripe PaymentIntents and trigger real webhook events.
+**Mid-run fix:** T02 surfaced that `POST /webhooks/stripe` 404'd — the route was built (`handleStripeWebhook`, signature-verified, idempotent) but never mounted in `apps/api/src/app.ts`. Fixed in [PR #64](https://github.com/natank/shearly/pull/64) (branch `fix/m4-p2-stripe-webhook-route`), verified live (events now land `200` and appear in `payments.webhook_events`). The API was restarted after this fix — already reflected in the running process.
+**Password for every seeded account below:** `long-enough-password`
+
+---
+
+## 1. Environment status
+
+| Component | State |
+|---|---|
+| Postgres (`shearly_postgres_1`) | Fresh (`docker compose down -v` then `up -d`), migrated from scratch |
+| Mailhog | Up (`localhost:8025`) |
+| Geocoder stub | Up (`localhost:3001`) |
+| API | Running: `pnpm exec tsx apps/api/src/main.ts` → `http://localhost:4000` |
+| Web | Running as a **production** build (`next build && next start`) → `http://localhost:3000`. Not `next dev` — dev/HMR mode showed unrelated flakiness during earlier E2E work; production mode matches what CI actually runs. |
+| Admin | **Not started.** If you need it for T04/T08's standing-record check or general admin access, run `pnpm exec nx run admin:serve` (port 4300) yourself. |
+
+To restart API/web later if they die:
+```bash
+cd /Users/nati-home/Projects/shearly
+set -a; source .env; set +a
+pnpm exec tsx apps/api/src/main.ts &         # from apps/api, or use nx run api:serve
+cd apps/web && env -u NODE_ENV pnpm exec next start --port 3000 &
+```
+(`env -u NODE_ENV` matters — `.env` sets `NODE_ENV=development`, which breaks a production `next build`/`next start` if it leaks into the process env.)
+
+---
+
+## 2. Fixtures created
+
+All fixtures were created via direct API calls (registration → document upload → submit → admin approve → profile/service/availability/connect-stub/go-live), the same path STD-M2/M3 use. Seed script: kept at `/private/tmp/claude-502/-Users-nati-home-Projects-shearly/fbd121d0-479a-4105-8b61-087aaaf49bf0/scratchpad/seed-m4-std.mjs` if you need to re-run it after another reset (`node seed-m4-std.mjs`, requires API up and migrated).
+
+### F-LIVE — primary provider
+
+| Field | Value |
+|---|---|
+| Email | `qc-m4-live-2026-08-23@example.com` |
+| Provider ID | `609b16aa-437e-4280-85bf-2f0fec3b66c3` |
+| Account ID | `7a0e4aae-5f26-4ab4-8be7-e41396ef2270` |
+| Service ID (Cut, 60min, ₪200) | `8f054f26-7dfa-4e87-a653-0cc23439b78f` |
+| Display name | QC Cut Tel Aviv M4 |
+| Point | 32.0853, 34.7818 (Tel Aviv) |
+| Status | approved, listed, connect stub-complete |
+
+### F-LIVE2 — second provider (T10's provider no-show, kept off F-LIVE's slot grid)
+
+| Field | Value |
+|---|---|
+| Email | `qc-m4-live2-2026-08-23@example.com` |
+| Provider ID | `700431ad-b55e-4c53-9382-824751ec9a2a` |
+| Service ID | `d4db42f7-1d13-437f-9846-655be5ceaf47` |
+
+### F-CUST1 — primary customer (owns T04–T10's bookings)
+
+| Field | Value |
+|---|---|
+| Email | `qc-m4-cust1-2026-08-23@example.com` |
+| Locale | he |
+
+### F-CUST2 — second customer (cross-tenant checks, T11/T13)
+
+| Field | Value |
+|---|---|
+| Email | `qc-m4-cust2-2026-08-23@example.com` |
+| Locale | en |
+
+### Admin
+
+| Field | Value |
+|---|---|
+| Email | `admin@shearly.local` |
+| Password | `change-me-admin-10` |
+
+---
+
+## 3. Seeded bookings
+
+All bookings are F-CUST1 → F-LIVE (except T10b, which is F-CUST1 → F-LIVE2), slot 2 days out, 60 min, ₪200. Addresses are distinct per booking so you can visually confirm which one you're looking at in any list/detail view.
+
+| For | Booking ID | State now | `slot_start` (UTC) | Address | Notes |
+|---|---|---|---|---|---|
+| **T04** (accept reveals address) | `c58cd5ae-dbab-4c55-ba06-0d276ed9799b` | `PENDING` | 2026-08-25 09:00 | QC T04 Street 1, Tel Aviv | Left `PENDING` on purpose — T04 step 1 needs to see the pre-accept DTO gate |
+| **T05** (decline frees slot) | `990b9490-5321-44da-b200-c4df119c3e02` | `PENDING` | 2026-08-25 10:00 | QC T05 Street 2, Tel Aviv | Left `PENDING` — you decline it live |
+| **T06** (cancel, full refund, >12h) | `5d2337d0-aee8-4d73-a60c-f342006a2752` | `CONFIRMED` | 2026-08-25 11:00 | QC T06 Street 3, Tel Aviv | Already >12h out — no SQL needed, cancel it as-is |
+| **T07** (cancel, 50% charge, ≤12h) | `d89fdb51-9d00-431e-ac74-18691e33a1b5` | `CONFIRMED` | 2026-08-25 12:00 | QC T07 Street 4, Tel Aviv | **Needs the SQL in §4 before testing** — push `slot_start` to ~6h out |
+| **T08** (provider cancel, always full refund) | `f220124e-810a-4040-8bba-191f33ecfe2f` | `CONFIRMED` | 2026-08-25 13:00 | QC T08 Street 5, Tel Aviv | Any timing works per the STD — no SQL needed |
+| **T09** (complete → capture + split) | `529b59dd-0c2d-4f95-8c80-a902ea9dac42` | `CONFIRMED` | 2026-08-25 14:00 | QC T09 Street 6, Tel Aviv | Step 2 ("complete before slot_start passes → rejected") works right now since it's still 2 days out. **Run the SQL in §4 before step 3.** |
+| **T10a** (customer no-show) | `8b2c6514-7d81-4fb4-b14e-9910a825edee` | `CONFIRMED` | 2026-08-25 15:00 | QC T10a Street 7, Tel Aviv | **Needs the SQL in §4** to push `slot_start` into the past first |
+| **T10b** (provider no-show, on F-LIVE2) | `e0864212-a8d4-4742-b53b-fa91b72517c7` | `CONFIRMED` | 2026-08-25 09:00 | QC T10b Street 8, Tel Aviv | **Needs the SQL in §4** to push `slot_start` into the past first |
+
+**Not pre-seeded:**
+- **T01/T02/T17** — these are the mid-flow-auth demo procedures themselves; run them live starting from a clean-cookie browser profile against F-LIVE, don't reuse a pre-made booking.
+- **T03** (concurrency) — fire the two overlapping `POST /bookings` yourself against F-LIVE at runtime (any two fresh, un-taken slots, e.g. `2026-08-25T16:00:00Z` and `2026-08-25T16:30:00Z`), so the race is real.
+- **T11/T12/T13** reuse T09's booking once it's `COMPLETED` — no separate seed needed.
+- **T15/T16/T18** — no dedicated fixture; T15/T16 are likely WAIVE per the STD's own guidance (no manual retry/clock-trigger surface exists), T18 is just a stopwatch on T02.
+
+---
+
+## 4. SQL you'll run yourself at test time
+
+Clock control (§3 of the STD): no live poller in M4, so `slot_start` must be pushed by hand immediately before the step that depends on it. Run via:
+
+```bash
+docker exec shearly_postgres_1 psql -U shearly -d shearly -c "<query>"
+```
+
+**Before T07** (50%-charge window — needs `slot_start` ≤12h out):
+```sql
+UPDATE booking.bookings SET slot_start = now() + interval '6 hours' WHERE id = 'd89fdb51-9d00-431e-ac74-18691e33a1b5';
+```
+
+**Before T09 step 3** (complete — needs `slot_start` in the past):
+```sql
+UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = '529b59dd-0c2d-4f95-8c80-a902ea9dac42';
+```
+
+**Before T10 step 2** (customer no-show — needs `slot_start` in the past):
+```sql
+UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = '8b2c6514-7d81-4fb4-b14e-9910a825edee';
+```
+
+**Before T10 step 4** (provider no-show — needs `slot_start` in the past):
+```sql
+UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = 'e0864212-a8d4-4742-b53b-fa91b72517c7';
+```
+
+Verify current booking states any time:
+```sql
+SELECT id, state, slot_start, address_line FROM booking.bookings ORDER BY created_at;
+```
+
+Verify ledger rows after a capture/split (T09, T10a):
+```sql
+SELECT booking_id, kind, amount_minor FROM payments.ledger ORDER BY created_at;
+```
+
+Verify standing-event records (T08, T10 step 4):
+```sql
+SELECT * FROM booking.standing_events ORDER BY created_at;
+```
+
+---
+
+## 5. Signing in as each fixture account in the browser
+
+The seed script only captured session cookies for API calls — for browser-driven steps (T01, T04 provider view via UI if you use one, T11 earnings screen, T12 review, T13 history), sign in normally at `http://localhost:3000/{he|en}/sign-in`:
+
+| Role | Email | Password |
+|---|---|---|
+| F-LIVE provider | `qc-m4-live-2026-08-23@example.com` | `long-enough-password` |
+| F-LIVE2 provider | `qc-m4-live2-2026-08-23@example.com` | `long-enough-password` |
+| F-CUST1 | `qc-m4-cust1-2026-08-23@example.com` | `long-enough-password` |
+| F-CUST2 | `qc-m4-cust2-2026-08-23@example.com` | `long-enough-password` |
+| Admin | `admin@shearly.local` | `change-me-admin-10` |
+
+For **T01**, use a private/incognito window (or `Clear site data` for `localhost:3000`/`localhost:4000`) so Profile A genuinely starts with no Shearly cookies, per the STD's reset checklist.
+
+---
+
+## 6. Known deviations from the STD as written
+
+**Superseded — Stripe is now in real test mode (see banner at top).** Kept below for the record, since T02 was actually run once in stub mode before the switch.
+
+- ~~Stripe stub mode~~ — no longer applies to anything booked from 2026-08-23 09:31 onward. For **T02 step 2** now: check the real Stripe test-mode dashboard (dashboard.stripe.com, test mode, account `acct_1U4Ti2Io9Lm5593Y`) for a PaymentIntent in `requires_capture`, or equivalently `SELECT * FROM payments.authorizations WHERE booking_id = '<id>'` — `stripe_payment_intent_id` should now start `pi_` (no `_stub_`). For **T14 step 1**: the booking form still posts a `paymentMethodId` string (this build doesn't wire a live Stripe Elements card-input iframe), so there's still no literal card-number field to watch post to Stripe's own domain — but the PaymentIntent created behind that call is now a real Stripe object, and `stripe listen`'s own log is a legitimate way to observe "Shearly's server talked to Stripe, not the browser directly." T14 step 2 (grep API logs for `4242424242424242`) still fully applies either way.
+- **T03 needs slots you pick at test time.** I didn't pre-fire the concurrent request pair, since the point of T03 is racing two live requests yourself (or via a small script) — freezing a "result" in advance would defeat the test. Suggested pair: `2026-08-25T16:00:00Z` and `2026-08-25T16:30:00Z` against F-LIVE (`609b16aa-437e-4280-85bf-2f0fec3b66c3`) / service `8f054f26-7dfa-4e87-a653-0cc23439b78f`, both as F-CUST2 (so they don't collide with F-CUST1's other bookings).
+
+---
+
+## 7. Mid-run findings log
+
+| When | What | Disposition |
+|---|---|---|
+| T01, first attempt | Landed on `/account` instead of the confirm screen after registering | Retried, passed on retry. Traced source/build/API — all correct. Treated as a one-off client-side flake per your call; watch for recurrence, especially on T17's English repeat. |
+| T02 step 2 | `stripe listen` showed every forwarded webhook 404ing — `POST /webhooks/stripe` was never mounted despite `handleStripeWebhook()` being fully built and unit-tested | Real defect against M4-P2. Fixed in [PR #64](https://github.com/natank/shearly/pull/64), verified live (events now `200`, land in `payments.webhook_events`). API restarted with the fix. |
+| T01/T02, post-auth confirm screen | After landing back on the confirm screen authenticated, the guest-draft address (`tel aviv`) is restored into component state (`choice.addressLine`) but never surfaced in the UI — no pre-selected radio, no visible confirmation. The screen instead shows an empty "Add a new address" form, which reads as though the address must be re-entered. In fact `onConfirm()` already uses `choice`, so clicking **Confirm and pay** directly (skipping the empty form) should work as-is — worth confirming next time this screen is reached. | **UI-only bug, logged, not fixed yet.** `libs/ui/feature-booking/src/confirm.tsx` — the restored draft needs a visible affordance (e.g. a pre-checked "use your selected address: tel aviv" option) so it's clear the booking is already submittable. Not blocking for M4 exit (CUS-001's actual requirement — "the slot and address are not lost, no re-entry required" — is still technically satisfied; this is a discoverability gap, not data loss). File as a follow-up fix after this QC run. |
+| Product note (not a defect) | You raised whether the address should move out of the confirm screen entirely and into the sign-in/register step, so there's one address prompt instead of two (draft capture → later formalize into a saved address). Reasonable UX simplification, but a bigger change: touches CUS-001's mid-flow-auth design and the CUS-005 address-book contract (would sign-in/register need an address field even for repeat customers just browsing? auto-save first booking's address under what label?). | Logged as a product/design suggestion for a future milestone, not implemented now — needs proper scoping, not an improvised mid-QC change. |
