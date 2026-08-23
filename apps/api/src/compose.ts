@@ -6,6 +6,11 @@ import { AvailabilityService } from '@shearly/services-availability';
 import { AuthorizationService, ConnectService, LedgerService } from '@shearly/services-payments';
 import { BookingService } from '@shearly/services-booking';
 import { DeterministicRanker, StubRanker, type ProviderRanker } from '@shearly/domain-ranking';
+import {
+  createSmtpEmailChannel,
+  NotificationService,
+  type NotificationChannel,
+} from '@shearly/services-notifications';
 
 export type AppServices = {
   config: AppConfig;
@@ -16,6 +21,7 @@ export type AppServices = {
   authorizations: AuthorizationService;
   ledger: LedgerService;
   booking: BookingService;
+  notifications: NotificationService;
   ranker: ProviderRanker;
   pool: pg.Pool;
 };
@@ -36,6 +42,8 @@ export function createRanker(config: AppConfig): ProviderRanker {
 export type ComposeOverrides = {
   /** Test-only: inject a fake Stripe client so saga tests don't need live Stripe test-mode credentials. */
   stripeClient?: import('stripe').default;
+  /** Test-only: inject a fake notification channel so tests can assert without real SMTP. */
+  notificationChannel?: NotificationChannel;
 };
 
 export function compose(
@@ -65,6 +73,10 @@ export function compose(
     ),
     ledger: new LedgerService(pool, config.commissionRate),
     booking: new BookingService(pool),
+    notifications: new NotificationService(
+      pool,
+      overrides?.notificationChannel ?? createSmtpEmailChannel(config.smtpUrl),
+    ),
     ranker: createRanker(config),
   };
 }
