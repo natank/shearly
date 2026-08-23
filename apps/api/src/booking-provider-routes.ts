@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
 import type { CatalogService } from '@shearly/services-provider-catalog';
-import type { BookingService } from '@shearly/services-booking';
+import type { BookingRow, BookingService } from '@shearly/services-booking';
 import type { LedgerService } from '@shearly/services-payments';
 import {
   transition,
@@ -33,6 +33,29 @@ async function requireOwnedBooking(
     throw new AuthorizationError('errors.unauthorized');
   }
   return { provider, booking };
+}
+
+// NFR-SEC-005: PENDING never discloses street/access-notes; CONFIRMED+ does.
+// Shared by the single-booking provider-view and the list route below so
+// the gate can't drift between the two call sites.
+function toProviderDTO(booking: BookingRow) {
+  if (booking.state === 'PENDING') {
+    return {
+      id: booking.id,
+      state: booking.state,
+      slotStart: booking.slot_start,
+      slotEnd: booking.slot_end,
+      responseDeadline: booking.response_deadline,
+    };
+  }
+  return {
+    id: booking.id,
+    state: booking.state,
+    slotStart: booking.slot_start,
+    slotEnd: booking.slot_end,
+    fullAddress: booking.address_line,
+    accessNotes: booking.access_notes,
+  };
 }
 
 export function createBookingProviderRoutes(
@@ -102,23 +125,24 @@ export function createBookingProviderRoutes(
 
   routes.get('/bookings/:id/provider-view', async (c) => {
     const { booking } = await requireOwnedBooking(input, c);
-    // NFR-SEC-005: PENDING never discloses street/access-notes; CONFIRMED+ does.
-    if (booking.state === 'PENDING') {
-      return c.json({
-        id: booking.id,
-        state: booking.state,
-        slotStart: booking.slot_start,
-        slotEnd: booking.slot_end,
-        responseDeadline: booking.response_deadline,
-      });
+    return c.json(toProviderDTO(booking));
+  });
+
+  // QCF-013: the provider-facing "my bookings" list — the read side of the
+  // accept/decline/complete/no-show/cancel actions, which until now had no
+  // UI to drive them from (API-only). Soonest-first, same DTO gate as the
+  // single-booking provider-view.
+  routes.get('/provider/me/bookings', async (c) => {
+    const account = await requireProvider(c, input.identity, input.config);
+    const provider = await input.catalog.getByAccount(account.id);
+    if (!provider) {
+      throw new AuthorizationError('errors.unauthorized');
     }
+    const bookings = await input.booking.listByProvider(provider.id);
     return c.json({
-      id: booking.id,
-      state: booking.state,
-      slotStart: booking.slot_start,
-      slotEnd: booking.slot_end,
-      fullAddress: booking.address_line,
-      accessNotes: booking.access_notes,
+      bookings: [...bookings]
+        .sort((a, b) => a.slot_start.getTime() - b.slot_start.getTime())
+        .map(toProviderDTO),
     });
   });
 

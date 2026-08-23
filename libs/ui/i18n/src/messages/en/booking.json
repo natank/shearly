@@ -32,5 +32,7 @@
   "reviewBody": "Say more (optional)",
   "leaveReview": "Leave a review",
   "submitReview": "Submit review",
-  "reviewFailed": "We could not save your review. Try again."
+  "reviewFailed": "We could not save your review. Try again.",
+  "reportNoShow": "Provider did not show",
+  "noShowFailed": "We could not report this. Try again."
 }
