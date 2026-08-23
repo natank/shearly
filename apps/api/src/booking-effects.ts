@@ -26,6 +26,7 @@ export async function executeEffects(
   bookingId: string,
   providerId: string,
   priceMinor: number,
+  currency: string,
   reason: string,
   effects: TransitionEffect[],
 ): Promise<void> {
@@ -41,11 +42,11 @@ export async function executeEffects(
         break;
       case 'Capture':
         settledMinor = Math.round((priceMinor * effect.pct) / 100);
-        await deps.authorizations.capture(bookingId, settledMinor);
+        await deps.authorizations.capture(bookingId, settledMinor, currency);
         break;
       case 'Refund':
         settledMinor = Math.round((priceMinor * effect.pct) / 100);
-        await deps.authorizations.refund(bookingId, settledMinor, reason);
+        await deps.authorizations.refund(bookingId, settledMinor, reason, currency);
         break;
       case 'Split':
         await deps.ledger.split(bookingId, settledMinor);

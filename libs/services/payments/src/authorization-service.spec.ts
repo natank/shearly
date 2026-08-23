@@ -202,8 +202,8 @@ describe('AuthorizationService', () => {
         'pm_test',
       );
 
-      await svc.capture(bookingId, 20000);
-      await svc.capture(bookingId, 20000);
+      await svc.capture(bookingId, 20000, 'USD');
+      await svc.capture(bookingId, 20000, 'USD');
       expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
@@ -236,10 +236,10 @@ describe('AuthorizationService', () => {
         },
         'pm_test',
       );
-      await svc.capture(bookingId, 20000);
+      await svc.capture(bookingId, 20000, 'USD');
 
-      await svc.refund(bookingId, 10000, 'late_cancel');
-      await svc.refund(bookingId, 10000, 'late_cancel');
+      await svc.refund(bookingId, 10000, 'late_cancel', 'USD');
+      await svc.refund(bookingId, 10000, 'late_cancel', 'USD');
       expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
@@ -316,7 +316,7 @@ describe('AuthorizationService', () => {
         'pm_test',
       );
 
-      await svc.capture(bookingId, 20000);
+      await svc.capture(bookingId, 20000, 'USD');
 
       const row = await pool.query<{ status: string }>(
         'SELECT status FROM payments.authorizations WHERE booking_id = $1',
@@ -354,9 +354,9 @@ describe('AuthorizationService', () => {
         },
         'pm_test',
       );
-      await svc.capture(bookingId, 20000);
+      await svc.capture(bookingId, 20000, 'USD');
 
-      await svc.refund(bookingId, 10000, 'late_cancel');
+      await svc.refund(bookingId, 10000, 'late_cancel', 'USD');
 
       const row = await pool.query<{ status: string }>(
         'SELECT status FROM payments.authorizations WHERE booking_id = $1',
@@ -470,7 +470,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(pool, stripe, 6);
     const bookingId = crypto.randomUUID();
     try {
-      await expect(svc.capture(bookingId, 20000)).rejects.toMatchObject({ code: 'PAYMENT' });
+      await expect(svc.capture(bookingId, 20000, 'USD')).rejects.toMatchObject({ code: 'PAYMENT' });
     } finally {
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
       await pool.end();
@@ -490,7 +490,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(pool, stripe, 6);
     const bookingId = crypto.randomUUID();
     try {
-      await expect(svc.refund(bookingId, 10000, 'late_cancel')).rejects.toMatchObject({
+      await expect(svc.refund(bookingId, 10000, 'late_cancel', 'USD')).rejects.toMatchObject({
         code: 'PAYMENT',
       });
     } finally {
@@ -526,7 +526,7 @@ describe('AuthorizationService', () => {
         },
         'pm_test',
       );
-      await expect(svc.capture(bookingId, 20000)).rejects.toMatchObject({ code: 'PAYMENT' });
+      await expect(svc.capture(bookingId, 20000, 'USD')).rejects.toMatchObject({ code: 'PAYMENT' });
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
@@ -561,8 +561,8 @@ describe('AuthorizationService', () => {
         },
         'pm_test',
       );
-      await svc.capture(bookingId, 20000);
-      await expect(svc.refund(bookingId, 10000, 'late_cancel')).rejects.toMatchObject({
+      await svc.capture(bookingId, 20000, 'USD');
+      await expect(svc.refund(bookingId, 10000, 'late_cancel', 'USD')).rejects.toMatchObject({
         code: 'PAYMENT',
       });
     } finally {
@@ -671,8 +671,8 @@ describe('AuthorizationService', () => {
         expect(result.stripePaymentIntentId).toMatch(/^pi_stub_/);
       }
 
-      await svc.capture(bookingId, 20000);
-      await svc.refund(bookingId, 10000, 'late_cancel');
+      await svc.capture(bookingId, 20000, 'USD');
+      await svc.refund(bookingId, 10000, 'late_cancel', 'USD');
       await svc.cancelAuthorization(bookingId, bookingAttemptId);
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
@@ -737,7 +737,7 @@ describe('AuthorizationService', () => {
       expect(afterRow.rows[0]?.status).toBe('AUTHORIZED');
 
       // capture now resolves against the real booking id.
-      await svc.capture(realBookingId, 20000);
+      await svc.capture(realBookingId, 20000, 'USD');
       expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [

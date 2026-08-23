@@ -8,5 +8,9 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../shared/errors" }, { "path": "../../domain/slot-computation" }]
+  "references": [
+    { "path": "../../shared/errors" },
+    { "path": "../../shared/events" },
+    { "path": "../../domain/slot-computation" }
+  ]
 }

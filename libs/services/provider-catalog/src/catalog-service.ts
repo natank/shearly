@@ -7,6 +7,7 @@ import {
   ValidationError,
 } from '@shearly/shared-errors';
 import { splitPrice } from '@shearly/domain-pricing';
+import { insertOutboxEvent } from '@shearly/shared-events';
 import type { DocumentStore } from './document-store.js';
 
 export type CatalogMail = {
@@ -113,9 +114,11 @@ export class CatalogService {
       throw new ValidationError('errors.validation');
     }
     await this.requirePublic(providerId);
+    const client = await this.pool.connect();
     let inserted;
     try {
-      inserted = await this.pool.query<{
+      await client.query('BEGIN');
+      inserted = await client.query<{
         id: string;
         rating: number;
         body: string | null;
@@ -126,20 +129,30 @@ export class CatalogService {
          RETURNING id, rating, body, created_at`,
         [providerId, input.rating, input.body ?? null, input.bookingId ?? null],
       );
+      await client.query(
+        `UPDATE catalog.providers SET
+           rating_sum = rating_sum + $2,
+           rating_count = rating_count + 1,
+           updated_at = now()
+         WHERE id = $1`,
+        [providerId, input.rating],
+      );
+      await insertOutboxEvent(client, 'catalog', 'ReviewSubmitted', {
+        reviewId: inserted.rows[0].id,
+        bookingId: input.bookingId ?? '',
+        providerId,
+        rating: input.rating,
+      });
+      await client.query('COMMIT');
     } catch (error) {
+      await client.query('ROLLBACK');
       if (isUniqueViolation(error)) {
         throw new ConflictError('rating.alreadyReviewed');
       }
       throw error;
+    } finally {
+      client.release();
     }
-    await this.pool.query(
-      `UPDATE catalog.providers SET
-         rating_sum = rating_sum + $2,
-         rating_count = rating_count + 1,
-         updated_at = now()
-       WHERE id = $1`,
-      [providerId, input.rating],
-    );
     return inserted.rows[0];
   }
 
@@ -258,13 +271,30 @@ export class CatalogService {
       throw new NotFoundError('catalog.providerNotFound');
     }
     const next = nextStatus(provider.status, action);
-    const updated = await this.pool.query<ProviderRow>(
-      `UPDATE catalog.providers
-       SET status = $2, decision_rationale = $3, decided_by = $4, decided_at = now(), updated_at = now()
-       WHERE id = $1
-       RETURNING ${PROVIDER_COLS}`,
-      [providerId, next, rationale ?? null, actorAccountId],
-    );
+    const client = await this.pool.connect();
+    let updated;
+    try {
+      await client.query('BEGIN');
+      updated = await client.query<ProviderRow>(
+        `UPDATE catalog.providers
+         SET status = $2, decision_rationale = $3, decided_by = $4, decided_at = now(), updated_at = now()
+         WHERE id = $1
+         RETURNING ${PROVIDER_COLS}`,
+        [providerId, next, rationale ?? null, actorAccountId],
+      );
+      if (action === 'approve') {
+        await insertOutboxEvent(client, 'catalog', 'ProviderApproved', {
+          providerId,
+          accountId: updated.rows[0].account_id,
+        });
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
     if (notify) {
       await this.sendMail({
         to: notify.providerEmail,

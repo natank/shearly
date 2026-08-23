@@ -10,6 +10,7 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../../shared/errors" },
+    { "path": "../../shared/events" },
     { "path": "../../domain/booking-state-machine" }
   ]
 }

@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { ConflictError, NotFoundError } from '@shearly/shared-errors';
 import type { BookingState } from '@shearly/domain-booking-state-machine';
+import { insertOutboxEvent } from '@shearly/shared-events';
 
 export type BookingRow = {
   id: string;
@@ -51,8 +52,10 @@ export class BookingService {
    * than a raw Postgres error code.
    */
   async create(input: CreateBookingInput): Promise<BookingRow> {
+    const client = await this.pool.connect();
     try {
-      const result = await this.pool.query<BookingRow>(
+      await client.query('BEGIN');
+      const result = await client.query<BookingRow>(
         `INSERT INTO booking.bookings
            (customer_id, provider_id, service_id, state, price_minor, currency,
             slot_start, slot_end, buffer_before_minutes, buffer_after_minutes,
@@ -77,12 +80,24 @@ export class BookingService {
           input.responseDeadline,
         ],
       );
-      return result.rows[0];
+      const booking = result.rows[0];
+      await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        bookingId: booking.id,
+        fromState: booking.state,
+        toState: booking.state,
+        event: 'created',
+        actor: 'customer',
+      });
+      await client.query('COMMIT');
+      return booking;
     } catch (error) {
+      await client.query('ROLLBACK');
       if (isExclusionViolation(error)) {
         throw new ConflictError('booking.slotTaken');
       }
       throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -131,6 +146,22 @@ export class BookingService {
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [bookingId, booking.state, nextState, event, actor, reason ?? null],
       );
+      await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        bookingId,
+        fromState: booking.state,
+        toState: nextState,
+        event,
+        actor,
+      });
+      if (nextState === 'COMPLETED') {
+        await insertOutboxEvent(client, 'booking', 'BookingCompleted', {
+          bookingId,
+          providerId: booking.provider_id,
+          customerId: booking.customer_id,
+          grossMinor: booking.price_minor,
+          currency: booking.currency,
+        });
+      }
       await client.query('COMMIT');
       return updated.rows[0];
     } catch (error) {

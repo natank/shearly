@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { insertOutboxEvent } from '@shearly/shared-events';
 
 export type ConnectStatus = 'not_started' | 'pending' | 'complete';
 
@@ -38,12 +39,23 @@ export class ConnectService {
   }
 
   async completeStub(accountId: string): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO payments.connect_accounts (account_id, status)
-       VALUES ($1, 'complete')
-       ON CONFLICT (account_id) DO UPDATE SET status = 'complete', updated_at = now()`,
-      [accountId],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO payments.connect_accounts (account_id, status)
+         VALUES ($1, 'complete')
+         ON CONFLICT (account_id) DO UPDATE SET status = 'complete', updated_at = now()`,
+        [accountId],
+      );
+      await insertOutboxEvent(client, 'payments', 'PayoutAccountReady', { accountId });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async isComplete(accountId: string): Promise<boolean> {
