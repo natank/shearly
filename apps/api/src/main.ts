@@ -1,9 +1,12 @@
 import { serve } from '@hono/node-server';
-import { loadConfig } from '@shearly/shared-config';
+import { compose } from './compose.js';
 import { createApp } from './app.js';
+import { startDueWorkPoller } from './due-work-poller.js';
 
-const config = loadConfig();
+const services = compose();
 
-serve({ fetch: createApp().fetch, port: config.apiPort }, (info) => {
+serve({ fetch: createApp(services).fetch, port: services.config.apiPort }, (info) => {
   process.stdout.write(`api listening on ${info.port}\n`);
 });
+
+startDueWorkPoller(services);

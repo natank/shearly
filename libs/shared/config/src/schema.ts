@@ -37,6 +37,7 @@ export const envSchema = z.object({
   BOOKING_RESPONSE_WINDOW_HOURS: z.coerce.number().positive().default(2),
   AUTO_COMPLETE_WINDOW_HOURS: z.coerce.number().positive().default(2),
   CANCEL_FULL_REFUND_HOURS: z.coerce.number().positive().default(12),
+  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -78,6 +79,7 @@ export type AppConfig = {
   bookingResponseWindowHours: number;
   autoCompleteWindowHours: number;
   cancelFullRefundHours: number;
+  pollIntervalMs: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -118,5 +120,6 @@ export function toAppConfig(env: Env): AppConfig {
     bookingResponseWindowHours: env.BOOKING_RESPONSE_WINDOW_HOURS,
     autoCompleteWindowHours: env.AUTO_COMPLETE_WINDOW_HOURS,
     cancelFullRefundHours: env.CANCEL_FULL_REFUND_HOURS,
+    pollIntervalMs: env.POLL_INTERVAL_MS,
   };
 }

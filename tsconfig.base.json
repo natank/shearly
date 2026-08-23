@@ -44,6 +44,7 @@
       "@shearly/domain-ranking": ["libs/domain/ranking/src/index.ts"],
       "@shearly/shared-config": ["libs/shared/config/src/index.ts"],
       "@shearly/shared-events": ["libs/shared/events/src/index.ts"],
+      "@shearly/shared-poller": ["libs/shared/poller/src/index.ts"],
       "@shearly/shared-observability": ["libs/shared/observability/src/index.ts"],
       "@shearly/shared-errors": ["libs/shared/errors/src/index.ts"],
       "@shearly/shared-testing": ["libs/shared/testing/src/index.ts"],

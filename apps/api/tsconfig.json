@@ -35,6 +35,9 @@
     },
     {
       "path": "../../libs/shared/errors"
+    },
+    {
+      "path": "../../libs/shared/poller"
     }
   ]
 }
