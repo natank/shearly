@@ -293,9 +293,20 @@ export function createCatalogRoutes(
     });
   });
 
+  // QCF-003: the queue card needs enough to tell providers apart at a
+  // glance — display name plus email (email lives in identity, not
+  // catalog, so this composes across the two read-only rather than having
+  // catalog reach into identity's schema itself).
   routes.get('/admin/vetting', async (c) => {
     await requireAdmin(c, identity, config);
-    return c.json({ queue: await catalog.listQueue() });
+    const queue = await catalog.listQueue();
+    const enriched = await Promise.all(
+      queue.map(async (row) => {
+        const account = await identity.accountById(row.account_id);
+        return { ...row, email: account?.email ?? null };
+      }),
+    );
+    return c.json({ queue: enriched });
   });
 
   routes.get('/admin/vetting/:providerId', async (c) => {
@@ -306,8 +317,9 @@ export function createCatalogRoutes(
       return c.json({ error: 'NOT_FOUND', translationKey: 'catalog.providerNotFound' }, 404);
     }
     const application = await catalog.application(provider.account_id);
+    const account = await identity.accountById(provider.account_id);
     return c.json({
-      provider,
+      provider: { ...provider, email: account?.email ?? null },
       documents: application.documents,
       missing: application.missing,
     });

@@ -6,5 +6,8 @@
   "reject": "דחייה",
   "openDoc": "פתיחת מסמך",
   "statusPending": "ממתין לראיון",
-  "statusInterview": "הראיון נקבע — אשרו אחרי השיחה"
+  "statusInterview": "הראיון נקבע — אשרו אחרי השיחה",
+  "unnamed": "(עדיין אין שם לתצוגה)",
+  "missing": "עדיין חסר",
+  "rationalePlaceholder": "סיבה (לא חובה)"
 }
