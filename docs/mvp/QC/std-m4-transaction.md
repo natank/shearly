@@ -324,23 +324,23 @@ Time the confirm-to-response-screen interval in T02.
 
 | Field | Value |
 |---|---|
-| Date | |
-| Commit | |
-| Tester | |
-| F-LIVE provider UUID | |
-| Stripe mode | test |
-| Reset | |
+| Date | 2026-08-23 |
+| Commit | `docs/m4-std-run` branch, on top of `main` @ `4d992cc` (M4-P9 + M4-P2 webhook fix), plus uncommitted-until-now Stripe Elements fix |
+| Tester | natan.kamusher@gmail.com (assisted) |
+| F-LIVE provider UUID | `609b16aa-437e-4280-85bf-2f0fec3b66c3` |
+| Stripe mode | test (real, switched from stub mid-run — see `m4-std-fixtures.md` for detail) |
+| Reset | `docker compose down -v` → `up -d` → migrated from scratch before this run started |
 
 | ID | Pri | Verdict | Notes |
 |---|---|---|---|
-| M4-T01 | Must | | |
-| M4-T02 | Must | | |
-| M4-T03 | Must | | |
-| M4-T04 | Must | | |
-| M4-T05 | Must | | |
-| M4-T06 | Must | | |
-| M4-T07 | Must | | |
-| M4-T08 | Must | | |
+| M4-T01 | Must | PASS | First attempt landed on `/account` instead of the confirm screen post-register; retried and passed. Treated as a one-off client flake, not reproduced on retry — see fixtures doc findings log. |
+| M4-T02 | Must | PASS | Found and fixed two real defects mid-run: (1) `POST /webhooks/stripe` was never mounted — fixed, merged as PR #64. (2) confirm screen hardcoded a fake `paymentMethodId`, rejected once real Stripe keys were wired in — fixed with real Stripe Elements (`payment-fields.tsx`), verified via curl-level card-collection flow (`stripe.createPaymentMethod` equivalent through direct Stripe API test-token calls), not yet through an actual browser click-through with a live `CardElement`. |
+| M4-T03 | Must | PASS | Concurrent race on F-LIVE (16:00 vs 16:30, overlapping-different starts): exactly one 201, one 409 with populated `alternatives`. Winning slot's occupancy reflected in the public slots endpoint; losing slot remained free, no double-hold. Verified against the DB `booking.bookings` table directly. |
+| M4-T04 | Must | PASS | No provider-facing UI exists (confirmed deliberate M4-P4 scope cut) — run via direct API calls. `PENDING` provider-view has no address fields; accept → `CONFIRMED`; `CONFIRMED` provider-view now includes `fullAddress`/`accessNotes`; a fresh `PENDING` booking's response full-text-searched for its street string — absent. |
+| M4-T05 | Must | PASS | Original stub-mode fixture booking correctly rejected by real Stripe on decline (expected friction, not a bug) — retried against a freshly seeded real-Stripe booking. Decline → `DECLINED`; Stripe PI confirmed `canceled` directly against the Stripe API (though `payments.authorizations.status` locally stayed stale at `AUTHORIZED` — logged as a separate finding, not blocking). Slot bookable again. |
+| M4-T06 | Must | PASS | Fresh real-Stripe `CONFIRMED` booking, slot ~34h out. Dry-run `no_charge`; confirmed cancel → `CANCELLED_BY_CUSTOMER`; Stripe PI confirmed `canceled`. |
+| M4-T07 | Must | PASS | Fresh real-Stripe `CONFIRMED` booking, `slot_start` pushed to +6h via SQL. Dry-run `partial_charge`/50%, disclosed before confirmation; confirmed cancel → `CANCELLED_BY_CUSTOMER`; ledger (gross ₪100/commission ₪20/net ₪80) and the real Stripe PI's `amount_received: 10000` both match the disclosed 50% exactly. |
+| M4-T08 | Must | **BLOCKED — real P0 defect found** | No route exists for provider-initiated cancel at all. `ProviderCancels` exists in the state machine but was never wired into `apps/api/src/booking-provider-routes.ts` (only accept/decline/complete/no-show/provider-view/earnings are mounted). BOK-006 is P0/Must, named explicitly in the master demo script and M4's own exit checklist — this is a real gap, not a QC environment issue. Cannot be manually exercised until a route exists. **This blocks M4 exit as currently scoped** — see `m4-std-fixtures.md` findings log for full detail. |
 | M4-T09 | Must | | |
 | M4-T10 | Must | | |
 | M4-T11 | Must | | |
@@ -352,4 +352,4 @@ Time the confirm-to-response-screen interval in T02.
 | M4-T17 | Should | | |
 | M4-T18 | Should | | |
 
-**Milestone QC:** PASS / FAIL
+**Milestone QC:** FAIL (blocked on M4-T08 / BOK-006 — no provider-cancel route exists; run in progress otherwise)
