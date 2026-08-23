@@ -155,6 +155,14 @@ export class BookingService {
       .sort((a, b) => b.slot_start.getTime() - a.slot_start.getTime());
     return { upcoming, past };
   }
+
+  async listByProvider(providerId: string): Promise<BookingRow[]> {
+    const result = await this.pool.query<BookingRow>(
+      `SELECT ${BOOKING_COLS} FROM booking.bookings WHERE provider_id = $1 ORDER BY slot_start DESC`,
+      [providerId],
+    );
+    return result.rows;
+  }
 }
 
 function isExclusionViolation(error: unknown): boolean {

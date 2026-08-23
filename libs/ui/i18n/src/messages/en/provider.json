@@ -45,5 +45,13 @@
   "missingVetting": "Admin has not approved you yet. Submit the application, then in another window open admin on port 4300, sign in as admin@shearly.local, schedule interview, then approve.",
   "missingConnect": "Payouts are not marked complete.",
   "missingServices": "Add at least one service.",
-  "missingAvailability": "Save weekly hours."
+  "missingAvailability": "Save weekly hours.",
+  "earnings": "Earnings",
+  "commissionRateLabel": "Commission rate",
+  "pendingBalance": "Pending balance",
+  "paidOutBalance": "Paid out",
+  "gross": "Gross",
+  "commission": "Commission",
+  "netEarnings": "Net",
+  "noEarnings": "No completed bookings yet."
 }
