@@ -26,6 +26,16 @@ function formatSlot(value: string, locale: string): string {
   }).format(new Date(value));
 }
 
+/** BOK-008 (provider-no-show half): the server's own guard rejects
+ * CustomerReportsProviderNoShow before slot_start has passed — this mirrors
+ * that so the button only appears when the call would actually succeed. */
+export function canReportProviderNoShow(
+  booking: Pick<BookingCard, 'state' | 'slotStart'>,
+  now: Date = new Date(),
+): boolean {
+  return booking.state === 'CONFIRMED' && new Date(booking.slotStart).getTime() < now.getTime();
+}
+
 function BookingRow({ booking, onReviewed }: { booking: BookingCard; onReviewed: () => void }) {
   const t = useTranslations('booking');
   const locale = useLocale();
@@ -34,6 +44,8 @@ function BookingRow({ booking, onReviewed }: { booking: BookingCard; onReviewed:
   const [body, setBody] = useState('');
   const [done, setDone] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [noShowPending, setNoShowPending] = useState(false);
+  const [noShowReported, setNoShowReported] = useState(false);
 
   async function submitReview() {
     setErrorKey(null);
@@ -52,6 +64,22 @@ function BookingRow({ booking, onReviewed }: { booking: BookingCard; onReviewed:
     onReviewed();
   }
 
+  async function reportNoShow() {
+    setErrorKey(null);
+    setNoShowPending(true);
+    const res = await fetch(`/api/bookings/${booking.id}/provider-no-show`, {
+      method: 'PATCH',
+      credentials: 'include',
+    });
+    setNoShowPending(false);
+    if (!res.ok) {
+      setErrorKey('noShowFailed');
+      return;
+    }
+    setNoShowReported(true);
+    onReviewed();
+  }
+
   return (
     <li className="flex flex-col gap-2 rounded-md border border-input p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
@@ -61,6 +89,14 @@ function BookingRow({ booking, onReviewed }: { booking: BookingCard; onReviewed:
       <span>{formatSlot(booking.slotStart, locale)}</span>
       <span>{`${booking.totalMinor / 100} ₪`}</span>
       <span>{booking.addressLine}</span>
+      {canReportProviderNoShow(booking) && !noShowReported ? (
+        <div className="flex flex-col gap-1">
+          {errorKey === 'noShowFailed' ? <span>{t('noShowFailed')}</span> : null}
+          <Button type="button" variant="outline" disabled={noShowPending} onClick={reportNoShow}>
+            {t('reportNoShow')}
+          </Button>
+        </div>
+      ) : null}
       {booking.state === 'COMPLETED' && !done ? (
         reviewing ? (
           <div className="flex flex-col gap-2">

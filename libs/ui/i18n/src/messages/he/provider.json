@@ -53,5 +53,13 @@
   "gross": "ברוטו",
   "commission": "עמלה",
   "netEarnings": "נטו",
-  "noEarnings": "עדיין אין הזמנות שהושלמו."
+  "noEarnings": "עדיין אין הזמנות שהושלמו.",
+  "myBookings": "ההזמנות שלי",
+  "noBookings": "עדיין אין הזמנות.",
+  "accept": "אישור",
+  "decline": "דחייה",
+  "complete": "סימון כהושלם",
+  "reportCustomerNoShow": "הלקוח לא הגיע",
+  "cancelBooking": "ביטול ההזמנה",
+  "bookingActionFailed": "הפעולה לא הצליחה. נסו שוב."
 }

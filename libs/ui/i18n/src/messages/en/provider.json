@@ -53,5 +53,13 @@
   "gross": "Gross",
   "commission": "Commission",
   "netEarnings": "Net",
-  "noEarnings": "No completed bookings yet."
+  "noEarnings": "No completed bookings yet.",
+  "myBookings": "My bookings",
+  "noBookings": "No bookings yet.",
+  "accept": "Accept",
+  "decline": "Decline",
+  "complete": "Mark complete",
+  "reportCustomerNoShow": "Customer did not show",
+  "cancelBooking": "Cancel booking",
+  "bookingActionFailed": "That did not go through. Try again."
 }
