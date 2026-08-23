@@ -109,4 +109,40 @@ describe('LedgerService', () => {
       await pool.end();
     }
   });
+
+  it('groups ledger entries by booking for a provider earnings listing', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (M4-P2)');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const ledger = new LedgerService(pool, 0.2);
+    const bookingA = crypto.randomUUID();
+    const bookingB = crypto.randomUUID();
+    try {
+      expect(await ledger.entriesByBooking([])).toEqual(new Map());
+
+      await ledger.split(bookingA, 20000);
+      await ledger.split(bookingB, 10000);
+      const byBooking = await ledger.entriesByBooking([bookingA, bookingB]);
+      expect(byBooking.get(bookingA)).toEqual([
+        { kind: 'gross', amountMinor: 20000 },
+        { kind: 'commission', amountMinor: 4000 },
+        { kind: 'net', amountMinor: 16000 },
+      ]);
+      expect(byBooking.get(bookingB)).toEqual([
+        { kind: 'gross', amountMinor: 10000 },
+        { kind: 'commission', amountMinor: 2000 },
+        { kind: 'net', amountMinor: 8000 },
+      ]);
+    } finally {
+      await pool.query('DELETE FROM payments.ledger WHERE booking_id = ANY($1::uuid[])', [
+        [bookingA, bookingB],
+      ]);
+      await pool.end();
+    }
+  });
 });

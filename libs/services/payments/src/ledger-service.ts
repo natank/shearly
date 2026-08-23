@@ -44,6 +44,29 @@ export class LedgerService {
     return result.rows.map((row) => ({ kind: row.kind, amountMinor: row.amount_minor }));
   }
 
+  /** PAY-004: every ledger row across a provider's bookings, grouped by booking. */
+  async entriesByBooking(bookingIds: string[]): Promise<Map<string, LedgerEntry[]>> {
+    const byBooking = new Map<string, LedgerEntry[]>();
+    if (bookingIds.length === 0) {
+      return byBooking;
+    }
+    const result = await this.pool.query<{
+      booking_id: string;
+      kind: 'gross' | 'commission' | 'net';
+      amount_minor: number;
+    }>(
+      `SELECT booking_id, kind, amount_minor FROM payments.ledger
+       WHERE booking_id = ANY($1::uuid[]) ORDER BY booking_id, created_at`,
+      [bookingIds],
+    );
+    for (const row of result.rows) {
+      const entries = byBooking.get(row.booking_id) ?? [];
+      entries.push({ kind: row.kind, amountMinor: row.amount_minor });
+      byBooking.set(row.booking_id, entries);
+    }
+    return byBooking;
+  }
+
   /** PAY-004: pending balance (net entries not yet paid out) for a provider account. */
   async pendingBalance(providerAccountId: string, bookingIdsForAccount: string[]): Promise<number> {
     if (bookingIdsForAccount.length === 0) {

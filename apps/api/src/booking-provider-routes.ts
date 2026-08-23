@@ -3,6 +3,7 @@ import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
 import type { CatalogService } from '@shearly/services-provider-catalog';
 import type { BookingService } from '@shearly/services-booking';
+import type { LedgerService } from '@shearly/services-payments';
 import {
   transition,
   TransitionError,
@@ -39,6 +40,7 @@ export function createBookingProviderRoutes(
     identity: IdentityService;
     catalog: CatalogService;
     booking: BookingService;
+    ledger: LedgerService;
     config: AppConfig;
   } & ExecuteEffectsDeps,
 ) {
@@ -108,6 +110,46 @@ export function createBookingProviderRoutes(
       slotEnd: booking.slot_end,
       fullAddress: booking.address_line,
       accessNotes: booking.access_notes,
+    });
+  });
+
+  // PAY-004: per-booking gross/commission/net read from the ledger (never
+  // derived by summing raw booking rows), plus pending-vs-paid-out balance.
+  routes.get('/provider/me/earnings', async (c) => {
+    const account = await requireProvider(c, input.identity, input.config);
+    const provider = await input.catalog.getByAccount(account.id);
+    if (!provider) {
+      throw new AuthorizationError('errors.unauthorized');
+    }
+    const bookings = await input.booking.listByProvider(provider.id);
+    const bookingIds = bookings.map((booking) => booking.id);
+    const byBooking = await input.ledger.entriesByBooking(bookingIds);
+
+    const entries = bookings
+      .filter((booking) => byBooking.has(booking.id))
+      .map((booking) => {
+        const rows = byBooking.get(booking.id) ?? [];
+        const amountFor = (kind: 'gross' | 'commission' | 'net') =>
+          rows.find((row) => row.kind === kind)?.amountMinor ?? 0;
+        return {
+          bookingId: booking.id,
+          slotStart: booking.slot_start,
+          currency: booking.currency,
+          grossMinor: amountFor('gross'),
+          commissionMinor: amountFor('commission'),
+          netMinor: amountFor('net'),
+        };
+      });
+
+    const netTotalMinor = entries.reduce((sum, entry) => sum + entry.netMinor, 0);
+    const paidOutMinor = await input.ledger.paidOutBalance(account.id);
+    const pendingMinor = netTotalMinor - paidOutMinor;
+
+    return c.json({
+      commissionRate: input.config.commissionRate,
+      pendingMinor,
+      paidOutMinor,
+      bookings: entries,
     });
   });
 

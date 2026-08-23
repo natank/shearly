@@ -45,5 +45,13 @@
   "missingVetting": "האדמין עדיין לא אישר. שלחו את הבקשה, ואז בחלון אחר פתחו את הניהול בפורט 4300, התחברו כ-admin@shearly.local, קבעו ראיון ואז אשרו.",
   "missingConnect": "התשלומים לא סומנו כהושלמו.",
   "missingServices": "הוסיפו לפחות שירות אחד.",
-  "missingAvailability": "שמרו שעות שבועיות."
+  "missingAvailability": "שמרו שעות שבועיות.",
+  "earnings": "הכנסות",
+  "commissionRateLabel": "שיעור עמלה",
+  "pendingBalance": "יתרה ממתינה",
+  "paidOutBalance": "שולם",
+  "gross": "ברוטו",
+  "commission": "עמלה",
+  "netEarnings": "נטו",
+  "noEarnings": "עדיין אין הזמנות שהושלמו."
 }
