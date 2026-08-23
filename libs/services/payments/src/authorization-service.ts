@@ -50,6 +50,13 @@ export class AuthorizationService {
     return this.stripe === null;
   }
 
+  /** The underlying Stripe client, or null in stub mode — for callers (the
+   * webhook route) that need the same client this service authorizes with,
+   * rather than constructing a second one from the same secret key. */
+  getClient(): Stripe | null {
+    return this.stripe;
+  }
+
   private async beginOperation(
     key: string,
     kind: OperationKind,

@@ -7,6 +7,7 @@ import { createAvailabilityRoutes } from './availability-routes.js';
 import { createDiscoveryRoutes } from './discovery-routes.js';
 import { createBookingRoutes } from './booking-routes.js';
 import { createBookingProviderRoutes } from './booking-provider-routes.js';
+import { createWebhooksRoutes } from './webhooks-routes.js';
 import { compose, type AppServices } from './compose.js';
 
 export function createApp(services: AppServices = compose()) {
@@ -47,8 +48,16 @@ export function createApp(services: AppServices = compose()) {
     authorizations: services.authorizations,
     ledger: services.ledger,
   });
+  const webhooks = createWebhooksRoutes({
+    pool: services.pool,
+    authorizations: services.authorizations,
+    config: services.config,
+  });
 
   app.get('/health', (c) => c.json({ ok: true }));
+  // Stripe calls the bare domain, never the /api-prefixed path — mounted at
+  // '/' only, unlike the customer/provider-facing routes below.
+  app.route('/', webhooks);
   app.route('/', auth);
   app.route('/api', auth);
   app.route('/', catalog);
