@@ -1,11 +1,41 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { insertOutboxEvent, dispatchDueOutboxEvents } from './outbox.js';
 import type { OutboxEventRow } from './event-catalog.js';
 
 const url = process.env.DATABASE_URL;
 
+// This lib is schema-agnostic (any service's outbox table has the same
+// shape) and must not depend on a consuming service's own migration —
+// self-migrate a throwaway `test_outbox_probe` schema instead, so this
+// suite works standalone regardless of migration order in CI.
+async function ensureTestOutboxSchema(databaseUrl: string): Promise<void> {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    await client.query('CREATE SCHEMA IF NOT EXISTS test_outbox_probe');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS test_outbox_probe.outbox (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        type text NOT NULL,
+        payload jsonb NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        dispatched_at timestamptz,
+        attempts int NOT NULL DEFAULT 0
+      )
+    `);
+  } finally {
+    await client.end();
+  }
+}
+
 describe('outbox', () => {
+  beforeAll(async () => {
+    if (url) {
+      await ensureTestOutboxSchema(url);
+    }
+  });
+
   it('writing an event alongside a state change is atomic: a forced rollback leaves no orphan row', async () => {
     if (!url) {
       if (process.env.CI) {
@@ -19,7 +49,7 @@ describe('outbox', () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        await insertOutboxEvent(client, 'test_outbox_probe', 'BookingStateChanged', {
           bookingId,
           fromState: 'PENDING',
           toState: 'CONFIRMED',
@@ -32,7 +62,7 @@ describe('outbox', () => {
       }
 
       const result = await pool.query(
-        `SELECT id FROM booking.outbox WHERE payload->>'bookingId' = $1`,
+        `SELECT id FROM test_outbox_probe.outbox WHERE payload->>'bookingId' = $1`,
         [bookingId],
       );
       expect(result.rows).toHaveLength(0);
@@ -54,7 +84,7 @@ describe('outbox', () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        await insertOutboxEvent(client, 'test_outbox_probe', 'BookingStateChanged', {
           bookingId,
           fromState: 'PENDING',
           toState: 'CONFIRMED',
@@ -67,7 +97,7 @@ describe('outbox', () => {
       }
 
       const result = await pool.query(
-        `SELECT id, dispatched_at FROM booking.outbox WHERE payload->>'bookingId' = $1`,
+        `SELECT id, dispatched_at FROM test_outbox_probe.outbox WHERE payload->>'bookingId' = $1`,
         [bookingId],
       );
       expect(result.rows).toHaveLength(1);
@@ -87,11 +117,11 @@ describe('outbox', () => {
     const pool = new pg.Pool({ connectionString: url });
     const bookingId = crypto.randomUUID();
     try {
-      await pool.query('DELETE FROM booking.outbox WHERE dispatched_at IS NULL');
+      await pool.query('DELETE FROM test_outbox_probe.outbox WHERE dispatched_at IS NULL');
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        await insertOutboxEvent(client, 'test_outbox_probe', 'BookingStateChanged', {
           bookingId,
           fromState: 'PENDING',
           toState: 'CONFIRMED',
@@ -118,7 +148,7 @@ describe('outbox', () => {
 
       const tick1 = dispatchDueOutboxEvents(
         pool,
-        'booking',
+        'test_outbox_probe',
         async (row) => {
           resolveEntered();
           await blocked;
@@ -129,7 +159,7 @@ describe('outbox', () => {
       await firstHandlerEntered;
       const tick2 = await dispatchDueOutboxEvents(
         pool,
-        'booking',
+        'test_outbox_probe',
         async (row) => {
           claimed.push(row);
         },
@@ -161,7 +191,7 @@ describe('outbox', () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        await insertOutboxEvent(client, 'test_outbox_probe', 'BookingStateChanged', {
           bookingId,
           fromState: 'PENDING',
           toState: 'CONFIRMED',
@@ -175,7 +205,7 @@ describe('outbox', () => {
 
       const result = await dispatchDueOutboxEvents(
         pool,
-        'booking',
+        'test_outbox_probe',
         async () => {
           throw new Error('handler exploded');
         },
@@ -184,7 +214,7 @@ describe('outbox', () => {
       expect(result.failed).toBeGreaterThanOrEqual(1);
 
       const row = await pool.query<{ dispatched_at: Date | null; attempts: number }>(
-        `SELECT dispatched_at, attempts FROM booking.outbox WHERE payload->>'bookingId' = $1`,
+        `SELECT dispatched_at, attempts FROM test_outbox_probe.outbox WHERE payload->>'bookingId' = $1`,
         [bookingId],
       );
       expect(row.rows[0].dispatched_at).toBeNull();
@@ -192,11 +222,16 @@ describe('outbox', () => {
 
       // Retried on next poll: the row is still due, and a succeeding handler
       // now dispatches it.
-      const retried = await dispatchDueOutboxEvents(pool, 'booking', async () => undefined, 10);
+      const retried = await dispatchDueOutboxEvents(
+        pool,
+        'test_outbox_probe',
+        async () => undefined,
+        10,
+      );
       const stillClaimable = retried.dispatched >= 0;
       expect(stillClaimable).toBe(true);
       const rowAfterRetry = await pool.query<{ dispatched_at: Date | null }>(
-        `SELECT dispatched_at FROM booking.outbox WHERE payload->>'bookingId' = $1`,
+        `SELECT dispatched_at FROM test_outbox_probe.outbox WHERE payload->>'bookingId' = $1`,
         [bookingId],
       );
       expect(rowAfterRetry.rows[0].dispatched_at).not.toBeNull();
