@@ -324,32 +324,32 @@ Time the confirm-to-response-screen interval in T02.
 
 | Field | Value |
 |---|---|
-| Date | |
-| Commit | |
-| Tester | |
-| F-LIVE provider UUID | |
-| Stripe mode | test |
-| Reset | |
+| Date | 2026-08-23 |
+| Commit | `docs/m4-std-run` branch, on top of `main` @ `4d992cc` (M4-P9 + M4-P2 webhook fix), plus uncommitted-until-now Stripe Elements fix |
+| Tester | natan.kamusher@gmail.com (assisted) |
+| F-LIVE provider UUID | `609b16aa-437e-4280-85bf-2f0fec3b66c3` |
+| Stripe mode | test (real, switched from stub mid-run — see `m4-std-fixtures.md` for detail) |
+| Reset | `docker compose down -v` → `up -d` → migrated from scratch before this run started |
 
 | ID | Pri | Verdict | Notes |
 |---|---|---|---|
-| M4-T01 | Must | | |
-| M4-T02 | Must | | |
-| M4-T03 | Must | | |
-| M4-T04 | Must | | |
-| M4-T05 | Must | | |
-| M4-T06 | Must | | |
-| M4-T07 | Must | | |
-| M4-T08 | Must | | |
-| M4-T09 | Must | | |
-| M4-T10 | Must | | |
-| M4-T11 | Must | | |
-| M4-T12 | Must | | |
-| M4-T13 | Must | | |
-| M4-T14 | Must | | |
-| M4-T15 | Must | | |
-| M4-T16 | Should | | |
-| M4-T17 | Should | | |
-| M4-T18 | Should | | |
+| M4-T01 | Must | PASS | First attempt landed on `/account` instead of the confirm screen post-register; retried and passed. Treated as a one-off client flake, not reproduced on retry — see fixtures doc findings log. |
+| M4-T02 | Must | PASS | Found and fixed two real defects mid-run: (1) `POST /webhooks/stripe` was never mounted — fixed, merged as PR #64, [QCF-008](./findings.md). (2) confirm screen hardcoded a fake `paymentMethodId`, rejected once real Stripe keys were wired in — fixed with real Stripe Elements (`payment-fields.tsx`), [QCF-009](./findings.md), verified via curl-level card-collection flow (`stripe.createPaymentMethod` equivalent through direct Stripe API test-token calls), not yet through an actual browser click-through with a live `CardElement`. |
+| M4-T03 | Must | PASS | Concurrent race on F-LIVE (16:00 vs 16:30, overlapping-different starts): exactly one 201, one 409 with populated `alternatives`. Winning slot's occupancy reflected in the public slots endpoint; losing slot remained free, no double-hold. Verified against the DB `booking.bookings` table directly. |
+| M4-T04 | Must | PASS | No provider-facing UI exists (confirmed deliberate M4-P4 scope cut) — run via direct API calls. `PENDING` provider-view has no address fields; accept → `CONFIRMED`; `CONFIRMED` provider-view now includes `fullAddress`/`accessNotes`; a fresh `PENDING` booking's response full-text-searched for its street string — absent. |
+| M4-T05 | Must | PASS | Original stub-mode fixture booking correctly rejected by real Stripe on decline (expected friction, not a bug) — retried against a freshly seeded real-Stripe booking. Decline → `DECLINED`; Stripe PI confirmed `canceled` directly against the Stripe API (though `payments.authorizations.status` locally stayed stale at `AUTHORIZED` — [QCF-011](./findings.md), not blocking). Slot bookable again. |
+| M4-T06 | Must | PASS | Fresh real-Stripe `CONFIRMED` booking, slot ~34h out. Dry-run `no_charge`; confirmed cancel → `CANCELLED_BY_CUSTOMER`; Stripe PI confirmed `canceled`. |
+| M4-T07 | Must | PASS | Fresh real-Stripe `CONFIRMED` booking, `slot_start` pushed to +6h via SQL. Dry-run `partial_charge`/50%, disclosed before confirmation; confirmed cancel → `CANCELLED_BY_CUSTOMER`; ledger (gross ₪100/commission ₪20/net ₪80) and the real Stripe PI's `amount_received: 10000` both match the disclosed 50% exactly. |
+| M4-T08 | Must | **BLOCKED — real P0 defect, [QCF-010](./findings.md)** | No route exists for provider-initiated cancel at all. `ProviderCancels` exists in the state machine but was never wired into `apps/api/src/booking-provider-routes.ts` (only accept/decline/complete/no-show/provider-view/earnings are mounted). BOK-006 is P0/Must, named explicitly in the master demo script and M4's own exit checklist — this is a real gap, not a QC environment issue. Cannot be manually exercised until a route exists. **This blocks M4 exit as currently scoped** — see [QCF-010](./findings.md) and `m4-std-fixtures.md` for full detail. |
+| M4-T09 | Must | PASS | Fresh real-Stripe `CONFIRMED` booking. Complete before `slot_start` → `409` (rejected). `slot_start` pushed to the past via SQL; complete → `COMPLETED`; ledger gross ₪200/commission ₪40/net ₪160 (exact default-20%-rate expected values); real Stripe PI confirmed `amount_received: 20000`. Repeat complete → `409` terminal-state guard (state machine itself blocks it, stronger than "double-execution is harmless" — no duplicate ledger rows, still exactly 3). |
+| M4-T10 | Must | **PARTIAL — steps 1-2 PASS, steps 3-4 BLOCKED, [QCF-010](./findings.md)** | Steps 1-2 (customer no-show): fresh real-Stripe `CONFIRMED` booking (`7cd4b659-347b-4f27-9b04-455c39da7890`), `slot_start` pushed past; provider reports no-show → `NO_SHOW_CUSTOMER`; full capture confirmed (ledger + real Stripe `amount_received: 20000`). Steps 3-4 (provider no-show) **cannot be run**: `CustomerReportsProviderNoShow` exists in the state machine but, like `ProviderCancels` (T08), has no HTTP route anywhere in `apps/api/src/booking-routes.ts` — confirmed via grep, zero non-test matches. Half of BOK-008 is unreachable from the API — same finding as T08, logged once as QCF-010. |
+| M4-T11 | Must | PASS | `GET /provider/me/earnings` as F-LIVE: 3 settled bookings listed with correct per-booking gross/commission/net (T09's ₪200/₪40/₪160 matches the STD's own example exactly); `pendingMinor: 40000` (₪400, correct sum of net across all 3), `paidOutMinor: 0`, shown as distinct fields. Second provider (F-LIVE2, no completed bookings) → `200`, empty list, both balances ₪0 — no crash. |
+| M4-T12 | Must | PASS | Reviewed T09's `COMPLETED` booking (rating 5, `qc-m4`) → `201`; provider aggregate `rating_sum`/`rating_count` updated to `5`/`1`. Second review attempt on the same booking → `409 rating.alreadyReviewed`. Review attempt on T06's `CANCELLED_BY_CUSTOMER` booking → `409 rating.notCompleted`. |
+| M4-T13 | Must | PASS | `GET /account/me/bookings` for the customer used throughout T02–T12: 5 upcoming (sorted soonest-first) / 3 past (sorted most-recent-first), cross-checked against `slot_start` vs `now()` directly in Postgres — matches exactly. `COMPLETED` booking detail shows provider, price, address, time, state. F-CUST2 (no bookings) → `200`, empty `upcoming`/`past`, no crash, no leaked data. |
+| M4-T14 | Must | PASS | Step 2 (grep API/web logs for `4242424242424242`): zero matches across the session. Step 1 (card posts to Stripe's iframe, never Shearly): confirmed structurally rather than via a live Network-tab observation — `grep`'d `confirm.tsx`/`payment-fields.tsx`/`booking-routes.ts`/`booking-saga.ts` for any raw card-field handling, zero matches; `CardElement` is Stripe's own hosted iframe by construction, and the only Stripe-derived value that ever reaches `POST /bookings` is the opaque `paymentMethodId` string from `stripe.createPaymentMethod()`. A live browser Network-tab check would be the stronger form of this assertion but wasn't performed this run. |
+| M4-T15 | Must | WAIVE | No manual retry surface exists anywhere in `apps/api` (grep for refund/retry routes — zero matches); refunds only happen as a side effect of cancel/no-show flows, keyed internally by `Idempotency-Key`. Per the STD's own fallback, waived — confirmed the automated coverage exists and is currently green: `libs/services/payments/src/authorization-service.spec.ts`'s "refund is idempotent against retry, keyed by reason" (asserts `stripe.refunds.create` called exactly once across two `refund()` calls with identical params). |
+| M4-T16 | Should | WAIVE | No manual trigger exists for `ResponseDeadlinePassed` — expected, per the M4 plan's own "no live poller in M4" note (M5 ships it). Confirmed automated coverage: `libs/domain/booking-state-machine`'s exhaustive table test `PENDING + ResponseDeadlinePassed (by system) -> EXPIRED`, currently green. Side observation: that same exhaustive table also has full, passing coverage for `CONFIRMED + ProviderCancels -> CANCELLED_BY_PROVIDER` and `CONFIRMED + CustomerReportsProviderNoShow -> NO_SHOW_PROVIDER` — i.e. T08/T10's missing capabilities are fully built and tested at the domain layer, just never wired to an HTTP route. Reinforces that those are wiring gaps, not half-finished features. |
+| M4-T17 | Should | PASS | `/en/book/.../.../...` confirmed `lang="en"`/`dir="ltr"` on the actual booking confirm page HTML. English happy-path booking creation → `201 PENDING` with real Stripe (`pm_...`). A same-slot repeat correctly triggers `409 booking.slotTaken` with populated alternatives (locale-agnostic API contract; the slot-taken screen's copy is driven by `t()`, already covered by `pnpm check:i18n` finding zero untranslated leaks anywhere in `feature-booking`). Note: `apps/web-e2e/src/booking-smoke.spec.ts`'s own English-locale Playwright test hardcodes a fake `paymentMethodId: 'pm_test'` and fails against this session's real-Stripe API — re-verified it passes cleanly when the API is restarted in true stub mode, confirming this is local-environment friction from testing with real keys, not a regression from the Elements fix; CI runs in stub mode so this test is unaffected there. |
+| M4-T18 | Should | PASS | `time curl ... POST /bookings` (real Stripe authorize round-trip included) → `0.793s` total, well within the 5s budget. Sanity check only, not a load test, per the STD's own framing — p95 under load is CI/automated-timing's job, not this manual run. |
 
-**Milestone QC:** PASS / FAIL
+**Milestone QC:** **FAIL** — run complete (17/18 procedures fully exercised, 1 WAIVEd with confirmed automated coverage, 2 partially blocked). Blocking issue: **M4-T08 (BOK-006, P0/Must) and half of M4-T10 (BOK-008, P0/Must) cannot be exercised — no HTTP route exists for provider-initiated cancel or customer-reported provider no-show** ([QCF-010](./findings.md)), despite both being fully implemented and tested at the state-machine layer. Both are named explicitly in the master demo script and M4's own exit checklist. Every other Must (T01–T07, T09, T11–T15) passed or was legitimately WAIVEd (T15/T16, matching the STD's own "no manual surface, automated coverage confirmed" fallback). All findings from this run are logged in [findings.md](./findings.md) as QCF-008 through QCF-012: two real defects found and fixed mid-run (Stripe webhook route never mounted, [QCF-008](./findings.md), PR #64 merged; booking confirm's fake `paymentMethodId`, [QCF-009](./findings.md), Elements now wired in, not yet merged), the blocking route gap ([QCF-010](./findings.md)), a stale `payments.authorizations.status` after cancel/capture/refund ([QCF-011](./findings.md), data-integrity only, money is correct), and a first-run address-restoration UI gap ([QCF-012](./findings.md)). **Do not mark M4 exited until T08/T10's routes exist and are verified** — re-run those two procedures once the fix lands, everything else stands.

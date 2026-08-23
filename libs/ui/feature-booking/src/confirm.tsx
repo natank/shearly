@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Button, Input } from '@shearly/ui-design-system';
 import type { PublicAccount } from '@shearly/contracts-identity';
 import { isCompleteDraft, type BookingSelection } from './draft';
+import { BookingPaymentFields } from './payment-fields';
 
 type SavedAddress = {
   id: string;
@@ -66,6 +67,9 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<ConfirmResult | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardErrorMessage, setCardErrorMessage] = useState<string | null>(null);
+  const createPaymentMethodRef = useRef<(() => Promise<string | null>) | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -142,6 +146,17 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
     }
     setPending(true);
     setErrorKey(null);
+    setCardErrorMessage(null);
+    // No real Stripe keys configured (dev without STRIPE_PUBLISHABLE_KEY):
+    // createPaymentMethod stays null, matching the server's own stub-mode
+    // fallback (AuthorizationService.isStubbed()) — send a placeholder the
+    // server never actually validates against Stripe.
+    const createPaymentMethod = createPaymentMethodRef.current;
+    const paymentMethodId = createPaymentMethod ? await createPaymentMethod() : 'pm_stub';
+    if (createPaymentMethod && !paymentMethodId) {
+      setPending(false);
+      return;
+    }
     const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: {
@@ -149,7 +164,7 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
         'Idempotency-Key': crypto.randomUUID(),
       },
       credentials: 'include',
-      body: JSON.stringify({ ...draft, paymentMethodId: 'pm_card_default' }),
+      body: JSON.stringify({ ...draft, paymentMethodId }),
     });
     const body = (await res.json()) as Record<string, unknown>;
     setPending(false);
@@ -260,12 +275,21 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
         </label>
       )}
 
+      {account ? (
+        <BookingPaymentFields
+          onReady={setCardReady}
+          onError={setCardErrorMessage}
+          submitRef={createPaymentMethodRef}
+        />
+      ) : null}
+
       {errorKey ? <p className="text-sm">{t(errorKey as 'missingAddress')}</p> : null}
+      {cardErrorMessage ? <p className="text-sm">{cardErrorMessage}</p> : null}
       {account ? (
         <Button
           type="button"
           onClick={onConfirm}
-          disabled={pending || !isCompleteDraft({ ...selection, ...choice })}
+          disabled={pending || !isCompleteDraft({ ...selection, ...choice }) || !cardReady}
         >
           {t('confirmAndPay')}
         </Button>

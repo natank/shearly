@@ -7,6 +7,7 @@ export const envSchema = z.object({
   GEOCODER_URL: z.string().url(),
   SMTP_URL: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().default(''),
+  STRIPE_PUBLISHABLE_KEY: z.string().default(''),
   STRIPE_WEBHOOK_SECRET: z.string().default(''),
   CURRENCY: z.string().min(1).default('ILS'),
   RADIUS_CAP_KM: z.coerce.number().positive().default(15),
@@ -47,6 +48,7 @@ export type AppConfig = {
   geocoderUrl: string;
   smtpUrl: string;
   stripeSecretKey: string;
+  stripePublishableKey: string;
   stripeWebhookSecret: string;
   currency: string;
   radiusCapKm: number;
@@ -86,6 +88,7 @@ export function toAppConfig(env: Env): AppConfig {
     geocoderUrl: env.GEOCODER_URL,
     smtpUrl: env.SMTP_URL,
     stripeSecretKey: env.STRIPE_SECRET_KEY,
+    stripePublishableKey: env.STRIPE_PUBLISHABLE_KEY,
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
     currency: env.CURRENCY,
     radiusCapKm: env.RADIUS_CAP_KM,
