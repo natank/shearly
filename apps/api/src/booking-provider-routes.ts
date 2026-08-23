@@ -91,6 +91,15 @@ export function createBookingProviderRoutes(
 
   routes.patch('/bookings/:id/no-show', (c) => act(c, 'ProviderReportsCustomerNoShow'));
 
+  // BOK-006: full refund regardless of timing, no fee ever charged to the
+  // provider — the state machine's own ProviderCancels branch enforces
+  // that (ReleaseAuth/Refund(100), never a Capture). A distinct path from
+  // the customer's PATCH /bookings/:id/cancel (booking-routes.ts) — same
+  // path+method for two different actors/events would silently collide,
+  // since Hono resolves to whichever route mounted first (design note:
+  // this repo mounts booking before bookingProvider in app.ts).
+  routes.patch('/bookings/:id/provider-cancel', (c) => act(c, 'ProviderCancels'));
+
   routes.get('/bookings/:id/provider-view', async (c) => {
     const { booking } = await requireOwnedBooking(input, c);
     // NFR-SEC-005: PENDING never discloses street/access-notes; CONFIRMED+ does.

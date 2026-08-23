@@ -193,6 +193,46 @@ export function createBookingRoutes(
     return c.json({ id: updated.id, state: updated.state });
   });
 
+  // BOK-008 (provider-no-show half): customer reports the provider never
+  // showed. Only reachable once slot_start has passed (state machine's own
+  // guard); full refund, no capture, standing event recorded against the
+  // provider. A distinct path from the provider's own PATCH
+  // /bookings/:id/no-show (booking-provider-routes.ts, ProviderReportsCustomerNoShow)
+  // — same path+method for two different actors/events would silently
+  // collide, since Hono resolves to whichever route mounted first.
+  routes.patch('/bookings/:id/provider-no-show', async (c) => {
+    const booking = await requireOwnBooking(c);
+    let result;
+    try {
+      result = transition(booking.state, 'CustomerReportsProviderNoShow', {
+        clock: new Date(),
+        slotStart: booking.slot_start,
+        actor: 'customer',
+        cancelFullRefundHours: input.config.cancelFullRefundHours,
+      });
+    } catch (error) {
+      if (error instanceof TransitionError) {
+        throw new ConflictError(`booking.${error.code.toLowerCase()}`);
+      }
+      throw error;
+    }
+    const updated = await input.booking.applyTransition(
+      booking.id,
+      result.nextState,
+      'CustomerReportsProviderNoShow',
+      'customer',
+    );
+    await executeEffects(
+      input,
+      booking.id,
+      booking.provider_id,
+      booking.price_minor,
+      'customer_reports_provider_no_show',
+      result.effects,
+    );
+    return c.json({ id: updated.id, state: updated.state });
+  });
+
   // CUS-006: upcoming (soonest-first) and past, separated. Provider display
   // name and service name are read from catalog for display — booking only
   // owns the price snapshot, not the current catalog labels.
