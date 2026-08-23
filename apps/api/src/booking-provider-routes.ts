@@ -97,6 +97,7 @@ export function createBookingProviderRoutes(
       booking.id,
       provider.id,
       booking.price_minor,
+      booking.currency,
       event,
       result.effects,
     );

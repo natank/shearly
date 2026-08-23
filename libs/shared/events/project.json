@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/shared/events/src",
   "projectType": "library",
-  "tags": ["type:shared"]
+  "tags": ["type:shared"],
+  "targets": {
+    "test": {
+      "executor": "@nx/vitest:test",
+      "options": {
+        "config": "libs/shared/events/vitest.config.ts"
+      }
+    }
+  }
 }

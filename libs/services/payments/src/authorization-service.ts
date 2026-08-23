@@ -1,6 +1,7 @@
 import pg from 'pg';
 import Stripe from 'stripe';
 import { PaymentError } from '@shearly/shared-errors';
+import { insertOutboxEvent } from '@shearly/shared-events';
 
 export type OperationKind = 'authorize' | 'setup' | 'cancel' | 'capture' | 'refund';
 export type OperationState = 'pending' | 'succeeded' | 'failed';
@@ -236,7 +237,7 @@ export class AuthorizationService {
   }
 
   /** design §7.4 Capture effect. pct is 100 or 50 (late cancel). Idempotent against retry. */
-  async capture(bookingId: string, amountMinor: number): Promise<void> {
+  async capture(bookingId: string, amountMinor: number, currency: string): Promise<void> {
     const key = `capture:${bookingId}`;
     const op = await this.beginOperation(key, 'capture', bookingId);
     if (!op.isNew && op.existing?.state === 'succeeded') {
@@ -262,10 +263,25 @@ export class AuthorizationService {
         );
       }
       await this.completeOperation(key, 'succeeded', { amountMinor });
-      await this.pool.query(
-        `UPDATE payments.authorizations SET status = 'CAPTURED', updated_at = now() WHERE booking_id = $1`,
-        [bookingId],
-      );
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE payments.authorizations SET status = 'CAPTURED', updated_at = now() WHERE booking_id = $1`,
+          [bookingId],
+        );
+        await insertOutboxEvent(client, 'payments', 'PaymentCaptured', {
+          bookingId,
+          amountMinor,
+          currency,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
       throw new PaymentError('errors.payments.captureFailed');
@@ -273,7 +289,12 @@ export class AuthorizationService {
   }
 
   /** design §7.4 Refund effect. Idempotent against retry by reason-scoped key. */
-  async refund(bookingId: string, amountMinor: number, reason: string): Promise<void> {
+  async refund(
+    bookingId: string,
+    amountMinor: number,
+    reason: string,
+    currency: string,
+  ): Promise<void> {
     const key = `refund:${bookingId}:${reason}`;
     const op = await this.beginOperation(key, 'refund', bookingId);
     if (!op.isNew && op.existing?.state === 'succeeded') {
@@ -298,10 +319,26 @@ export class AuthorizationService {
         );
       }
       await this.completeOperation(key, 'succeeded', { amountMinor, reason });
-      await this.pool.query(
-        `UPDATE payments.authorizations SET status = 'REFUNDED', updated_at = now() WHERE booking_id = $1`,
-        [bookingId],
-      );
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE payments.authorizations SET status = 'REFUNDED', updated_at = now() WHERE booking_id = $1`,
+          [bookingId],
+        );
+        await insertOutboxEvent(client, 'payments', 'PaymentRefunded', {
+          bookingId,
+          amountMinor,
+          currency,
+          reason,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
       throw new PaymentError('errors.payments.refundFailed');

@@ -7,6 +7,7 @@ import {
   type Occupancy,
   type WeeklyRule,
 } from '@shearly/domain-slot-computation';
+import { insertOutboxEvent } from '@shearly/shared-events';
 
 export class AvailabilityService {
   constructor(
@@ -16,15 +17,26 @@ export class AvailabilityService {
   ) {}
 
   async replaceWeekly(accountId: string, rules: WeeklyRule[]): Promise<void> {
-    await this.pool.query('DELETE FROM availability.weekly_rules WHERE account_id = $1', [
-      accountId,
-    ]);
-    for (const rule of rules) {
-      await this.pool.query(
-        `INSERT INTO availability.weekly_rules (account_id, weekday, start_minute, end_minute)
-         VALUES ($1, $2, $3, $4)`,
-        [accountId, rule.weekday, rule.startMinute, rule.endMinute],
-      );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM availability.weekly_rules WHERE account_id = $1', [
+        accountId,
+      ]);
+      for (const rule of rules) {
+        await client.query(
+          `INSERT INTO availability.weekly_rules (account_id, weekday, start_minute, end_minute)
+           VALUES ($1, $2, $3, $4)`,
+          [accountId, rule.weekday, rule.startMinute, rule.endMinute],
+        );
+      }
+      await insertOutboxEvent(client, 'availability', 'AvailabilityChanged', { accountId });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -41,17 +53,28 @@ export class AvailabilityService {
         );
       }
     }
-    await this.pool.query(
-      `INSERT INTO availability.exceptions (account_id, on_date, kind, start_minute, end_minute)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        accountId,
-        exception.date,
-        exception.kind,
-        exception.startMinute ?? null,
-        exception.endMinute ?? null,
-      ],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO availability.exceptions (account_id, on_date, kind, start_minute, end_minute)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          accountId,
+          exception.date,
+          exception.kind,
+          exception.startMinute ?? null,
+          exception.endMinute ?? null,
+        ],
+      );
+      await insertOutboxEvent(client, 'availability', 'AvailabilityChanged', { accountId });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listWeekly(accountId: string): Promise<WeeklyRule[]> {

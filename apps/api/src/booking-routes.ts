@@ -187,6 +187,7 @@ export function createBookingRoutes(
       booking.id,
       booking.provider_id,
       booking.price_minor,
+      booking.currency,
       'customer_cancel',
       result.effects,
     );
@@ -227,6 +228,7 @@ export function createBookingRoutes(
       booking.id,
       booking.provider_id,
       booking.price_minor,
+      booking.currency,
       'customer_reports_provider_no_show',
       result.effects,
     );
