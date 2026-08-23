@@ -2,10 +2,12 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../../../dist/out-tsc/libs/services/notifications",
+    "tsBuildInfoFile": "../../../dist/out-tsc/libs/services/notifications/tsconfig.tsbuildinfo",
     "rootDir": "src",
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     "declaration": true,
     "composite": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../shared/events" }]
 }

@@ -38,6 +38,9 @@
     },
     {
       "path": "../../libs/shared/poller"
+    },
+    {
+      "path": "../../libs/services/notifications"
     }
   ]
 }
