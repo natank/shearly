@@ -98,7 +98,7 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 
 | Plan ID | PR | Title | Merged |
 |---|---|---|---|
-| M5-P1 | | | |
+| M5-P1 | [#71](https://github.com/natank/shearly/pull/71) | Outbox schema + event bus | 2026-08-23 |
 | M5-P2 | | | |
 | M5-P3 | | | |
 | M5-P4 | | | |
@@ -124,15 +124,17 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 ### M5-P2 — Due-work poller
 
 **Does**
-- The in-process poller design §6.6 describes and M4 left entirely unbuilt: claims `booking.bookings` (`PENDING` + `response_deadline <= now`; `CONFIRMED` + `auto_complete_at <= now`), `booking.reminders` (`CONFIRMED` + `remind_at <= now` + unsent), `payments.authorizations` (`SETUP_ONLY` + `authorize_after <= now`; `AUTHORIZED` + `reauthorize_by <= now`), `payments.payouts` (positive pending balance + schedule due or admin-triggered).
+- The in-process poller design §6.6 describes and M4 left entirely unbuilt: claims `booking.bookings` (`PENDING` + `response_deadline <= now`; `CONFIRMED` + `auto_complete_at <= now`), `booking.reminders` (`CONFIRMED` + `remind_at <= now` + unsent — claimed only, sending is M5-P5), `payments.authorizations` (`SETUP_ONLY` + `authorize_after <= now`; `AUTHORIZED` + `reauthorize_by <= now`).
+- **`payments.payouts` claiming deferred to M5-P7, decided at P2 write time:** the plan's original scope named it here, but no writer for `payments.payouts` exists yet (OPS-005/M5-P7 is that writer), there is no due-date column, and no automated payout cadence has been decided anywhere in the design or this plan — there is nothing to claim. M5-P7 adds the column, the writer, and the real claim logic together, once "due" has an actual definition.
+- Also fixed at P2 write time: neither `auto_complete_at` (booking) nor `reauthorize_by` (authorization) was ever written by any existing code path — both columns existed since M4's migrations but nothing populated them. `auto_complete_at` is now set on the `ProviderAccepts` transition (`slot_end + AUTO_COMPLETE_WINDOW_HOURS`), the same pattern `response_deadline` already uses at booking-creation time. `reauthorize_by` stays unset — the deferred-authorize leg beyond `auth_horizon` is confirmed to stay a named hole per M4-Q4's own fallback (nothing produces a `SETUP_ONLY` row with a real `reauthorize_by` to claim in this environment); the poller still queries for it so M5+ Stripe test-mode work can wire it in later without touching the poller itself.
 - One lock row per due item, `FOR UPDATE SKIP LOCKED` (same pattern as the outbox dispatcher — a shared "claim due work" helper, not two copies of the same locking code).
 - Poll interval is configuration (`POLL_INTERVAL_MS` or similar); must stay inside NOT-001's one-minute bound.
-- Runs claimed booking rows through `transition()` (`ResponseDeadlinePassed`, `AutoCompleteElapsed` — both already implemented and unit-tested in the state machine since M4, per M4's "no live poller in M4, frozen-clock tests only" note) and claimed authorization rows through the payments saga's deferred-authorize leg (design §8.1's beyond-`auth_horizon` path, mocked in M4 per M4-Q4 — this PR is where it becomes real, or is confirmed to stay a named hole if Stripe test-mode can't simulate it locally, per design's own fallback).
+- Runs claimed booking rows through `transition()` (`ResponseDeadlinePassed`, `AutoCompleteElapsed` — both already implemented and unit-tested in the state machine since M4, per M4's "no live poller in M4, frozen-clock tests only" note) and claimed authorization rows through the payments saga's deferred-authorize leg (design §8.1's beyond-`auth_horizon` path, mocked in M4 per M4-Q4 — confirmed above to stay a named hole in this PR).
 - Failed runs increment attempts and surface on OPS-002 (M5-P6) — this PR only needs the failure to be visible in a queryable shape, not the admin UI itself yet.
 
 **Tests.** A `PENDING` booking whose `response_deadline` has passed is claimed and transitions to `EXPIRED` with authorization released, without any request hitting the API. Two concurrent poller ticks racing the same due row: exactly one claims it (integration test against real Postgres, same rigor as M4's BOK-002 concurrency test). A poller tick that throws mid-transition leaves the booking in its pre-attempt state, not half-transitioned, and increments an attempt counter rather than silently dropping the row.
 
-**Out.** Any notification dispatch (M5-P3/P4). Real off-session Stripe confirm beyond what M4-Q4 already scoped as a named hole.
+**Out.** Any notification dispatch (M5-P3/P4). Real off-session Stripe confirm beyond what M4-Q4 already scoped as a named hole. `payments.payouts` claiming (moved to M5-P7, see above).
 
 ### M5-P3 — Notifications service: email channel
 
@@ -186,7 +188,7 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 - Manual full/partial refund outside the automatic cancel-window rules, with a mandatory recorded reason — reuses `AuthorizationService.refund()` (built in M4, QCF-011 already fixed its status-tracking gap) rather than a new payment mechanism.
 - Reverse a disputed no-show outcome (BOK-008) and adjust the financial result accordingly.
 - Every manual financial action attributed to the acting admin, timestamped, immutable — a new audit table (`payments.manual_actions` or similar; exact shape decided at write time, following the same append-only pattern as `payments.ledger`).
-- Manual payout trigger for a provider with a positive pending balance (`payments.payouts`, table already exists from M4, unused until this PR) — idempotent against a repeat trigger, reflected immediately in the M4-P8 earnings view's `paidOutMinor`.
+- Manual payout trigger for a provider with a positive pending balance (`payments.payouts`, table already exists from M4, unused until this PR) — idempotent against a repeat trigger, reflected immediately in the M4-P8 earnings view's `paidOutMinor`. Also picks up the poller-claiming piece deferred here from M5-P2 (see that section): adds whatever due-date column and cadence this PR decides on, and wires it into the shared claim-due-work helper the poller already has.
 
 **Tests.** A manual refund without a reason is rejected. A manual refund with a reason succeeds, is attributed/timestamped, and shows up in the booking's OPS-002 detail view. Reversing a no-show outcome correctly re-nets the financial result (money moves the opposite direction from the original no-show capture/refund). A manual payout moves the correct amount, is idempotent against a double-click, and the earnings view reflects `paidOutMinor` increasing by exactly that amount — direct extension of M4-P8's own `pendingMinor`/`paidOutMinor` split test.
 

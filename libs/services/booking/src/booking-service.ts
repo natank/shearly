@@ -117,13 +117,20 @@ export class BookingService {
     return booking;
   }
 
-  /** Applies a state-machine transition result: new state + audit row, in one transaction. */
+  /**
+   * Applies a state-machine transition result: new state + audit row, in
+   * one transaction. `autoCompleteAt` is only ever passed on the
+   * `ProviderAccepts` transition into `CONFIRMED` (design §6.6's due-work
+   * poller needs it to claim auto-complete-eligible bookings) — every
+   * other caller omits it and the column is left as COALESCE(existing).
+   */
   async applyTransition(
     bookingId: string,
     nextState: BookingState,
     event: string,
     actor: 'customer' | 'provider' | 'system' | 'admin',
     reason?: string,
+    autoCompleteAt?: Date,
   ): Promise<BookingRow> {
     const client = await this.pool.connect();
     try {
@@ -137,9 +144,10 @@ export class BookingService {
         throw new NotFoundError('booking.notFound');
       }
       const updated = await client.query<BookingRow>(
-        `UPDATE booking.bookings SET state = $2, decline_reason = COALESCE($3, decline_reason), updated_at = now()
+        `UPDATE booking.bookings SET state = $2, decline_reason = COALESCE($3, decline_reason),
+           auto_complete_at = COALESCE($4, auto_complete_at), updated_at = now()
          WHERE id = $1 RETURNING ${BOOKING_COLS}`,
-        [bookingId, nextState, reason ?? null],
+        [bookingId, nextState, reason ?? null, autoCompleteAt ?? null],
       );
       await client.query(
         `INSERT INTO booking.state_transitions (booking_id, from_state, to_state, event, actor, reason)

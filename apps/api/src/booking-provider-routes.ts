@@ -85,12 +85,19 @@ export function createBookingProviderRoutes(
       }
       throw error;
     }
+    const autoCompleteAt =
+      event === 'ProviderAccepts'
+        ? new Date(
+            booking.slot_end.getTime() + input.config.autoCompleteWindowHours * 60 * 60 * 1000,
+          )
+        : undefined;
     const updated = await input.booking.applyTransition(
       booking.id,
       result.nextState,
       event,
       'provider',
       reason,
+      autoCompleteAt,
     );
     await executeEffects(
       input,
