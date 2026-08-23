@@ -131,4 +131,79 @@ describe('catalog HTTP', () => {
     });
     expect(decision.status).toBe(404);
   });
+
+  // QCF-003: the queue previously had no way to tell two pending providers
+  // apart (no name/email in the list, no way to see submitted documents).
+  it('vetting queue and detail carry email/display name and document links (QCF-003)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    await services.identity.ensureAdmin(
+      services.config.adminSeedEmail,
+      services.config.adminSeedPassword,
+    );
+    const activeApp = app;
+    const email = `qcf3-${crypto.randomUUID()}@example.com`;
+    const session = await registerProvider(activeApp, email);
+    async function upload(kind: string, fileName: string) {
+      const form = new FormData();
+      form.set('kind', kind);
+      form.set('file', new File([`bytes-${fileName}`], fileName, { type: 'image/png' }));
+      await activeApp.request('/catalog/me/documents', {
+        method: 'POST',
+        headers: { cookie: session },
+        body: form,
+      });
+    }
+    await upload('government_id', 'id.png');
+    await upload('credential', 'cred.png');
+    for (let i = 0; i < 5; i += 1) {
+      await upload('portfolio', `p${i}.png`);
+    }
+    await app.request('/catalog/me/profile', {
+      method: 'PATCH',
+      headers: { cookie: session, 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'QCF-003 Cuts' }),
+    });
+    const me = (await (await app.request('/me', { headers: { cookie: session } })).json()) as {
+      account: { id: string };
+    };
+    const providerId = (await services.catalog.getByAccount(me.account.id))?.id;
+    expect(providerId).toBeTruthy();
+    await app.request('/catalog/me/submit', { method: 'POST', headers: { cookie: session } });
+
+    const adminSignIn = await app.request('/auth/sign-in', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.71' },
+      body: JSON.stringify({
+        email: services.config.adminSeedEmail,
+        password: services.config.adminSeedPassword,
+      }),
+    });
+    const admin = cookie(adminSignIn);
+
+    const queueRes = await app.request('/admin/vetting', { headers: { cookie: admin } });
+    const queueBody = (await queueRes.json()) as {
+      queue: Array<{ id: string; display_name: string | null; email: string | null }>;
+    };
+    const row = queueBody.queue.find((item) => item.id === providerId);
+    expect(row?.display_name).toBe('QCF-003 Cuts');
+    expect(row?.email).toBe(email);
+
+    const detailRes = await app.request(`/admin/vetting/${providerId}`, {
+      headers: { cookie: admin },
+    });
+    const detailBody = (await detailRes.json()) as {
+      provider: { email: string | null };
+      documents: Array<{ id: string; kind: string }>;
+    };
+    expect(detailBody.provider.email).toBe(email);
+    expect(detailBody.documents.length).toBeGreaterThan(0);
+
+    const doc = detailBody.documents[0];
+    const docRes = await app.request(`/admin/vetting/${providerId}/documents/${doc.id}`, {
+      headers: { cookie: admin },
+    });
+    expect(docRes.status).toBe(200);
+  });
 });

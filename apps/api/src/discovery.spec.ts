@@ -3,8 +3,10 @@ import { migrateIdentity } from '@shearly/services-identity/migrate';
 import { migrateCatalog } from '@shearly/services-provider-catalog/migrate';
 import { migrateAvailability } from '@shearly/services-availability/migrate';
 import { migratePayments } from '@shearly/services-payments/migrate';
+import type { ProviderRanker, RankedProvider, RankingInput } from '@shearly/domain-ranking';
 import { createApp } from './app.js';
 import { compose } from './compose.js';
+import { composeDiscovery } from './discovery.js';
 
 const url = process.env.DATABASE_URL;
 const telAviv = { lat: 32.0853, lng: 34.7818 };
@@ -143,5 +145,85 @@ describe('discovery HTTP', () => {
     expect(stubIds).toEqual([...detIds].reverse());
     await stub.pool.end();
     await det.pool.end();
+  });
+
+  // QCF-007: composeDiscovery's try/catch around the ranker call had zero
+  // test coverage — the fallback sort itself was unit-tested
+  // (defaultDistanceThenRating), but nothing exercised the catch branch
+  // that actually triggers it (a ranker throw or the rankingTimeoutMs
+  // race). These call composeDiscovery directly with a hand-rolled
+  // ranker, bypassing compose()'s real DeterministicRanker/StubRanker, so
+  // the failure/timeout path is exercised deterministically.
+  it('falls back to distance-then-rating order when the ranker throws', async () => {
+    if (!url || !services) {
+      return;
+    }
+    const near = await seedListed({ lat: telAviv.lat, lng: telAviv.lng, name: 'Ranker Throws A' });
+    const far = await seedListed({
+      lat: telAviv.lat + 0.02,
+      lng: telAviv.lng,
+      name: 'Ranker Throws B',
+    });
+    const throwingRanker: ProviderRanker = {
+      rank: async () => {
+        throw new Error('ranker exploded');
+      },
+    };
+    const result = await composeDiscovery({
+      catalog: services.catalog,
+      availability: services.availability,
+      ranker: throwingRanker,
+      config: services.config,
+      point: telAviv,
+      query: null,
+      filters: {},
+    });
+    expect(result.state).toBe('ok');
+    const ids =
+      result.state === 'ok'
+        ? result.providers.map((row) => row.id).filter((id) => id === near || id === far)
+        : [];
+    // defaultDistanceThenRating sorts closer-first; `near` has no distance
+    // offset, `far` is ~2.2km further out.
+    expect(ids).toEqual([near, far]);
+  });
+
+  it('falls back to distance-then-rating order when the ranker exceeds rankingTimeoutMs', async () => {
+    if (!url || !services) {
+      return;
+    }
+    const near = await seedListed({ lat: telAviv.lat, lng: telAviv.lng, name: 'Ranker Slow A' });
+    const far = await seedListed({
+      lat: telAviv.lat + 0.02,
+      lng: telAviv.lng,
+      name: 'Ranker Slow B',
+    });
+    const slowRanker: ProviderRanker = {
+      rank: (input: RankingInput) =>
+        new Promise<RankedProvider[]>((resolve) => {
+          setTimeout(
+            () =>
+              resolve(
+                input.candidates.map((c) => ({ providerId: c.providerId, score: 0, reasons: [] })),
+              ),
+            services.config.rankingTimeoutMs + 100,
+          );
+        }),
+    };
+    const result = await composeDiscovery({
+      catalog: services.catalog,
+      availability: services.availability,
+      ranker: slowRanker,
+      config: services.config,
+      point: telAviv,
+      query: null,
+      filters: {},
+    });
+    expect(result.state).toBe('ok');
+    const ids =
+      result.state === 'ok'
+        ? result.providers.map((row) => row.id).filter((id) => id === near || id === far)
+        : [];
+    expect(ids).toEqual([near, far]);
   });
 });

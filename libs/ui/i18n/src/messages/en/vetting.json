@@ -6,5 +6,8 @@
   "reject": "Reject",
   "openDoc": "Open document",
   "statusPending": "Waiting for interview",
-  "statusInterview": "Interview scheduled — approve when the call is done"
+  "statusInterview": "Interview scheduled — approve when the call is done",
+  "unnamed": "(no display name yet)",
+  "missing": "Still missing",
+  "rationalePlaceholder": "Reason (optional)"
 }
