@@ -248,6 +248,128 @@ describe('AuthorizationService', () => {
     }
   });
 
+  // QCF-011: payments.authorizations.status was set once at authorize/setup
+  // time and never updated by cancelAuthorization/capture/refund, leaving a
+  // stale AUTHORIZED status forever after. These assert the real terminal
+  // status lands in the table for each of the three effect methods.
+  it('cancelAuthorization sets status to CANCELLED', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (QCF-011)');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+
+      await svc.cancelAuthorization(bookingId, bookingAttemptId);
+
+      const row = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(row.rows[0]?.status).toBe('CANCELLED');
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('capture sets status to CAPTURED', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (QCF-011)');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+
+      await svc.capture(bookingId, 20000);
+
+      const row = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(row.rows[0]?.status).toBe('CAPTURED');
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('refund sets status to REFUNDED', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (QCF-011)');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await svc.capture(bookingId, 20000);
+
+      await svc.refund(bookingId, 10000, 'late_cancel');
+
+      const row = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(row.rows[0]?.status).toBe('REFUNDED');
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
   it('authorize failure records a failed operation and throws PaymentError; retry short-circuits', async () => {
     if (!url) {
       if (process.env.CI) {

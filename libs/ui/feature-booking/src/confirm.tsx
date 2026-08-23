@@ -231,6 +231,10 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
               {`${address.label} — ${address.line}`}
             </label>
           ))}
+          {choice.addressLine &&
+          !addresses.some((address) => address.line === choice.addressLine) ? (
+            <p className="text-sm">{`${t('usingSelectedAddress')}: ${choice.addressLine}`}</p>
+          ) : null}
           <div className="flex flex-col gap-2 rounded-md border border-input p-3">
             <span className="text-sm">{t('addNewAddress')}</span>
             <Input

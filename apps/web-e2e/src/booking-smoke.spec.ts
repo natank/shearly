@@ -143,6 +143,45 @@ test('anonymous visitor picks a slot, authenticates mid-flow, and lands back on 
   await expect(page.getByText('PENDING')).toBeVisible();
 });
 
+// QCF-012: on the very first booking (no saved addresses yet), the guest
+// draft's address was restored into component state but never surfaced in
+// the UI — the screen showed only an empty "add a new address" form, as
+// though the address had to be re-entered. Confirms the restored address
+// is now visibly shown once the visitor lands back on the confirm screen.
+test('the guest-draft address is visibly shown on return, not silently restored (QCF-012)', async ({
+  page,
+  request,
+}) => {
+  await page.setExtraHTTPHeaders({ 'x-forwarded-for': uniqueIp() });
+
+  const name = `E2E Draft Address ${Date.now()}`;
+  const { providerId, serviceId } = await seedListedProvider(request, name);
+
+  const slotStart = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  slotStart.setUTCHours(10, 0, 0, 0);
+
+  await page.goto(
+    `/he/book/${providerId}/${serviceId}?slotStart=${encodeURIComponent(slotStart.toISOString())}`,
+  );
+
+  // As a guest, before authenticating: fill the plain address input.
+  await page.getByLabel('כתובת').fill('draft street 42');
+  await page.getByRole('button', { name: 'יצירת חשבון' }).click();
+  await expect(page).toHaveURL(/\/he\/register\?next=/);
+
+  const email = `e2e-draft-addr-${Date.now()}@example.com`;
+  await page.getByLabel('אימייל').fill(email);
+  await page.getByLabel('סיסמה').fill('long-enough-password');
+  await page.getByRole('button', { name: 'יצירת חשבון' }).click();
+
+  // Back on the confirm screen, now authenticated: the restored address is
+  // visibly shown, not just usable — this is the account's first booking,
+  // so the address book is empty and the address doesn't appear as a saved
+  // radio option; it must appear as its own visible line instead.
+  await expect(page).toHaveURL(new RegExp(`/he/book/${providerId}/${serviceId}`));
+  await expect(page.getByText('draft street 42')).toBeVisible({ timeout: 15_000 });
+});
+
 test('a completed booking shows in account history and can be reviewed once (CUS-006, RAT-001)', async ({
   page,
   request,

@@ -2,6 +2,7 @@
   "missingSlot": "לא נבחר תור. חזרו ובחרו זמן.",
   "confirmTitle": "אישור ההזמנה",
   "address": "כתובת",
+  "usingSelectedAddress": "משתמשים בכתובת",
   "addNewAddress": "הוספת כתובת חדשה",
   "addressLabelField": "תווית (למשל: בית)",
   "addressLineField": "כתובת",
