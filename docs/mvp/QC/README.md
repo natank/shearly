@@ -11,12 +11,11 @@
 | QC-M2 | [std-m2-supply.md](./std-m2-supply.md) | M2 Supply | [m2-supply.md](../04-implementation-plan/m2-supply.md) |
 | QC-M3 | [std-m3-demand.md](./std-m3-demand.md) | M3 Demand | [m3-demand.md](../04-implementation-plan/m3-demand.md) |
 | QC-M4 | [std-m4-transaction.md](./std-m4-transaction.md) | M4 Transaction | [m4-transaction.md](../04-implementation-plan/m4-transaction.md) |
+| QC-M5 | [std-m5-operate-and-bar.md](./std-m5-operate-and-bar.md) | M5 Operate & bar | [m5-operate-and-bar.md](../04-implementation-plan/m5-operate-and-bar.md) |
 
 Shared lab, credentials, and wipe/reset: [lab.md](./lab.md).
 
 Running log of confirmed FAILs pending triage into the backlog: [findings.md](./findings.md).
-
-M5 STD is written with that milestone plan, not before.
 
 ---
 
