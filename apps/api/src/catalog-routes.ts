@@ -174,6 +174,14 @@ export function createCatalogRoutes(
     return c.json({ status: 'complete' });
   });
 
+  // PAY-001/NFR-SEC-001: the publishable key is safe to expose (it only
+  // authorizes client-side Stripe.js calls, never a secret operation) — this
+  // is what the booking confirm screen's Stripe Elements mount needs, for
+  // both anonymous and authenticated visitors.
+  routes.get('/payments/config', (c) => {
+    return c.json({ publishableKey: config.stripePublishableKey });
+  });
+
   routes.get('/payments/me/connect', async (c) => {
     const account = await requireProvider(c, identity, config);
     if (!extras) {
