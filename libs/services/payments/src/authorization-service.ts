@@ -225,6 +225,10 @@ export class AuthorizationService {
         });
       }
       await this.completeOperation(key, 'succeeded', { cancelled: true });
+      await this.pool.query(
+        `UPDATE payments.authorizations SET status = 'CANCELLED', updated_at = now() WHERE booking_id = $1`,
+        [bookingId],
+      );
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
       throw new PaymentError('errors.payments.cancelFailed');
@@ -258,6 +262,10 @@ export class AuthorizationService {
         );
       }
       await this.completeOperation(key, 'succeeded', { amountMinor });
+      await this.pool.query(
+        `UPDATE payments.authorizations SET status = 'CAPTURED', updated_at = now() WHERE booking_id = $1`,
+        [bookingId],
+      );
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
       throw new PaymentError('errors.payments.captureFailed');
@@ -290,6 +298,10 @@ export class AuthorizationService {
         );
       }
       await this.completeOperation(key, 'succeeded', { amountMinor, reason });
+      await this.pool.query(
+        `UPDATE payments.authorizations SET status = 'REFUNDED', updated_at = now() WHERE booking_id = $1`,
+        [bookingId],
+      );
     } catch (error) {
       await this.completeOperation(key, 'failed', { message: (error as Error).message });
       throw new PaymentError('errors.payments.refundFailed');

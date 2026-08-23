@@ -2,6 +2,7 @@
   "missingSlot": "Missing slot selection. Go back and pick a time.",
   "confirmTitle": "Confirm your booking",
   "address": "Address",
+  "usingSelectedAddress": "Using",
   "addNewAddress": "Add a new address",
   "addressLabelField": "Label (e.g. Home)",
   "addressLineField": "Address",
