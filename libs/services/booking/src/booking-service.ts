@@ -119,10 +119,20 @@ export class BookingService {
 
   /**
    * Applies a state-machine transition result: new state + audit row, in
-   * one transaction. `autoCompleteAt` is only ever passed on the
-   * `ProviderAccepts` transition into `CONFIRMED` (design §6.6's due-work
-   * poller needs it to claim auto-complete-eligible bookings) — every
-   * other caller omits it and the column is left as COALESCE(existing).
+   * one transaction. `autoCompleteAt`/`remindAt` are only ever passed on
+   * the `ProviderAccepts` transition into `CONFIRMED` (design §6.6's
+   * due-work poller needs `autoCompleteAt` to claim auto-complete-eligible
+   * bookings; NOT-002 needs `remindAt` to schedule the reminder) — every
+   * other caller omits them and `auto_complete_at` is left as
+   * COALESCE(existing). `remindAt` is undefined rather than omitted when
+   * the booking was confirmed too close to its own slot for a reminder to
+   * make sense ("where scheduling permits", NOT-002) — no reminder row is
+   * inserted in that case.
+   *
+   * Leaving `CONFIRMED` for any other state (cancel, no-show, complete)
+   * invalidates any pending reminder row outright — NOT-002's own
+   * acceptance criterion is that a cancelled-before-window booking sends
+   * nothing, not that it's merely skipped by timing luck.
    */
   async applyTransition(
     bookingId: string,
@@ -131,6 +141,7 @@ export class BookingService {
     actor: 'customer' | 'provider' | 'system' | 'admin',
     reason?: string,
     autoCompleteAt?: Date,
+    remindAt?: Date,
   ): Promise<BookingRow> {
     const client = await this.pool.connect();
     try {
@@ -154,6 +165,17 @@ export class BookingService {
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [bookingId, booking.state, nextState, event, actor, reason ?? null],
       );
+      if (nextState === 'CONFIRMED' && remindAt) {
+        await client.query(
+          `INSERT INTO booking.reminders (booking_id, remind_at) VALUES ($1, $2)`,
+          [bookingId, remindAt],
+        );
+      } else if (booking.state === 'CONFIRMED' && nextState !== 'CONFIRMED') {
+        await client.query(
+          `DELETE FROM booking.reminders WHERE booking_id = $1 AND sent_at IS NULL`,
+          [bookingId],
+        );
+      }
       await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
         bookingId,
         fromState: booking.state,

@@ -170,6 +170,19 @@ const en = {
       `It typically arrives within 5-10 business days, depending on your bank.`,
     ],
   }),
+  // NOT-002: both parties are reminded ahead of a CONFIRMED booking.
+  reminderCustomer: (b: BookingSummary): Copy => ({
+    subject: 'Reminder: your upcoming booking',
+    lines: [
+      `This is a reminder for ${escapeHtml(b.serviceName)} on ${formatSlot('en', b.slotStart)}.`,
+    ],
+  }),
+  reminderProvider: (b: BookingSummary): Copy => ({
+    subject: 'Reminder: upcoming booking',
+    lines: [
+      `This is a reminder for ${escapeHtml(b.serviceName)} on ${formatSlot('en', b.slotStart)}.`,
+    ],
+  }),
 };
 
 const he = {
@@ -294,6 +307,18 @@ const he = {
       `בדרך כלל הוא מגיע תוך 5-10 ימי עסקים, בהתאם לבנק שלך.`,
     ],
   }),
+  reminderCustomer: (b: BookingSummary): Copy => ({
+    subject: 'תזכורת: ההזמנה הקרובה שלך',
+    lines: [
+      `זוהי תזכורת עבור ${escapeHtml(b.serviceName)} בתאריך ${formatSlot('he', b.slotStart)}.`,
+    ],
+  }),
+  reminderProvider: (b: BookingSummary): Copy => ({
+    subject: 'תזכורת: הזמנה קרובה',
+    lines: [
+      `זוהי תזכורת עבור ${escapeHtml(b.serviceName)} בתאריך ${formatSlot('he', b.slotStart)}.`,
+    ],
+  }),
 };
 
 const copyByLocale: Record<Locale, typeof en> = { en, he };
@@ -341,4 +366,8 @@ export const templates = {
     render(locale, copyByLocale[locale].noShowProviderReportedForProvider(b)),
   refundIssued: (locale: Locale, b: BookingSummary, amountMinor: number) =>
     render(locale, copyByLocale[locale].refundIssued(b, amountMinor)),
+  reminderCustomer: (locale: Locale, b: BookingSummary) =>
+    render(locale, copyByLocale[locale].reminderCustomer(b)),
+  reminderProvider: (locale: Locale, b: BookingSummary) =>
+    render(locale, copyByLocale[locale].reminderProvider(b)),
 };
