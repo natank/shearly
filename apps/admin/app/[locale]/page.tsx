@@ -21,6 +21,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           <Link href="/vetting">{vettingT('queue')}</Link>
           <Link href="/bookings">{adminT('bookings')}</Link>
           <Link href="/exceptions">{adminT('exceptions')}</Link>
+          <Link href="/standing">{adminT('standing')}</Link>
           <SignOutButton />
         </>
       ) : (

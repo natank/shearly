@@ -260,4 +260,71 @@ describe('BookingService', () => {
       await pool.end();
     }
   });
+
+  it('standingStats (OPS-004) counts standing events and completion rate per provider', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migrateBooking(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const svc = new BookingService(pool);
+    const providerId = crypto.randomUUID();
+    const quietProviderId = crypto.randomUUID();
+    try {
+      expect(await svc.standingStats([])).toEqual(new Map());
+
+      const completed = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-05T09:00:00Z'),
+          slotEnd: new Date('2026-10-05T10:00:00Z'),
+        }),
+      );
+      await pool.query(`UPDATE booking.bookings SET state = 'COMPLETED' WHERE id = $1`, [
+        completed.id,
+      ]);
+      const other = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-11-05T09:00:00Z'),
+          slotEnd: new Date('2026-11-05T10:00:00Z'),
+        }),
+      );
+      await pool.query(
+        `INSERT INTO booking.standing_events (booking_id, provider_id, kind) VALUES
+           ($1, $2, 'provider_cancel'),
+           ($1, $2, 'provider_cancel'),
+           ($1, $2, 'provider_no_show'),
+           ($1, $2, 'response_miss')`,
+        [other.id, providerId],
+      );
+
+      await svc.create(baseInput({ providerId: quietProviderId }));
+
+      const stats = await svc.standingStats([providerId, quietProviderId]);
+      expect(stats.get(providerId)).toEqual({
+        cancellationCount: 2,
+        noShowCount: 1,
+        responseMissCount: 1,
+        totalBookings: 2,
+        completedCount: 1,
+      });
+      expect(stats.get(quietProviderId)).toEqual({
+        cancellationCount: 0,
+        noShowCount: 0,
+        responseMissCount: 0,
+        totalBookings: 1,
+        completedCount: 0,
+      });
+    } finally {
+      await pool.query('DELETE FROM booking.standing_events WHERE provider_id = $1', [providerId]);
+      await pool.query('DELETE FROM booking.bookings WHERE provider_id = ANY($1)', [
+        [providerId, quietProviderId],
+      ]);
+      await pool.end();
+    }
+  });
 });

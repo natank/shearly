@@ -309,6 +309,91 @@ export class BookingService {
       createdAt: row.created_at,
     }));
   }
+
+  /**
+   * OPS-004: per-provider standing metrics for the admin standing view.
+   * `booking.standing_events` (written since M4 via the state machine's
+   * RecordStanding effect) supplies the event counts directly; completion
+   * rate is computed fresh from booking.bookings rather than trusting
+   * catalog.providers.completion_count, which has no writer anywhere in
+   * the codebase despite being read by discovery.ts — not relied on here.
+   */
+  async standingStats(providerIds: string[]): Promise<
+    Map<
+      string,
+      {
+        cancellationCount: number;
+        noShowCount: number;
+        responseMissCount: number;
+        totalBookings: number;
+        completedCount: number;
+      }
+    >
+  > {
+    const stats = new Map<
+      string,
+      {
+        cancellationCount: number;
+        noShowCount: number;
+        responseMissCount: number;
+        totalBookings: number;
+        completedCount: number;
+      }
+    >();
+    if (providerIds.length === 0) {
+      return stats;
+    }
+    for (const providerId of providerIds) {
+      stats.set(providerId, {
+        cancellationCount: 0,
+        noShowCount: 0,
+        responseMissCount: 0,
+        totalBookings: 0,
+        completedCount: 0,
+      });
+    }
+
+    const events = await this.pool.query<{ provider_id: string; kind: string; n: string }>(
+      `SELECT provider_id, kind, count(*)::text AS n
+       FROM booking.standing_events
+       WHERE provider_id = ANY($1::uuid[])
+       GROUP BY provider_id, kind`,
+      [providerIds],
+    );
+    for (const row of events.rows) {
+      const entry = stats.get(row.provider_id);
+      if (!entry) {
+        continue;
+      }
+      if (row.kind === 'provider_cancel') {
+        entry.cancellationCount = Number(row.n);
+      } else if (row.kind === 'provider_no_show') {
+        entry.noShowCount = Number(row.n);
+      } else if (row.kind === 'response_miss') {
+        entry.responseMissCount = Number(row.n);
+      }
+    }
+
+    const totals = await this.pool.query<{ provider_id: string; total: string; completed: string }>(
+      `SELECT provider_id,
+              count(*)::text AS total,
+              count(*) FILTER (WHERE state = 'COMPLETED')::text AS completed
+       FROM booking.bookings
+       WHERE provider_id = ANY($1::uuid[])
+       GROUP BY provider_id`,
+      [providerIds],
+    );
+    for (const row of totals.rows) {
+      const entry = stats.get(row.provider_id);
+      if (!entry) {
+        continue;
+      }
+      entry.totalBookings = Number(row.total);
+      entry.completedCount = Number(row.completed);
+    }
+
+    return stats;
+  }
 }
 
 function isExclusionViolation(error: unknown): boolean {

@@ -86,7 +86,10 @@ M5-P6b OPS-002 apps/admin UI over the M5-P6 API (split out at P6 write time — 
 M5-P7 OPS-003 manual refund/no-show reversal + OPS-005 manual payout trigger
     │
     ▼
-M5-P8 OPS-004 standing view + suspend/delist; OPS-006 funnel view
+M5-P8 OPS-004 standing view + suspend/delist
+    │
+    ▼
+M5-P8b OPS-006 funnel view (split out at P8 write time — see that section)
     │
     ▼
 M5-P9 A11Y/UX pass + both-locale E2E extension (decline/expiry/cancel) + named alarms (OBS-004)
@@ -110,6 +113,7 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 | M5-P6b | | | |
 | M5-P7 | | | |
 | M5-P8 | | | |
+| M5-P8b | | | |
 | M5-P9 | | | |
 | M5-P10 | | | |
 
@@ -209,17 +213,28 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 
 **Out.** Automated payout scheduling (PAY-006, stretch, M5-P10 only if slack).
 
-### M5-P8 — OPS-004 standing + OPS-006 funnel
+### M5-P8 — OPS-004 standing + suspend
+
+**Split from the plan's original single P8, decided at write time:** OPS-004 (standing view + suspend, entirely within `apps/admin` and the existing `booking`/`catalog` schemas) and OPS-006 (funnel view) are different-shaped work — OPS-006 needs new page-view/profile-view/slot-selected event *emission* from `apps/web` itself (the customer-facing app), not just admin-side aggregation, which is a different surface and risk profile than a self-contained backend+admin-UI slice. Same reasoning as the M5-P6/P6b split: ship the smaller, independently-testable slice here, the instrumentation-plus-aggregation slice as M5-P8b immediately after.
 
 **Does**
 - Standing view (`apps/admin`): per-provider cancellation count, no-show count, expiry/response rate, completion rate — reads `booking.standing_events` (written since M4, never read until now) plus computed rates from `booking.bookings`/`booking.state_transitions`.
 - Threshold-crossing flags a provider for review (config-driven thresholds, not hardcoded).
 - Admin suspend/delist action: removes the provider from discovery (reuses catalog's existing `listed`/`status` fields, same mechanism M2's go-live/vetting already uses) while explicitly preserving any still-`CONFIRMED` booking for separate resolution (not silently cancelling in-flight commitments).
-- Funnel view (`apps/admin`): discovery → profile view → slot selected → booking created → confirmed → completed, with per-stage drop-off and payment failures/expiries/declines each visible separately. Needs new lightweight funnel-stage events (page-view/UI-driven, not booking-state-driven — design §6.4's core-events list doesn't enumerate these; see §9 M5-Q3 for exactly what's new here) emitted into the same M5-P1 outbox mechanism.
 
-**Tests.** A provider crossing the configured cancellation threshold is flagged; one below it is not. Suspending a provider removes them from a discovery search that previously found them, while their existing `CONFIRMED` booking is unaffected and still actionable via OPS-002. Funnel counts match a scripted sequence of discovery→booking events exactly (deterministic integration test, not a dashboard eyeball check).
+**Tests.** A provider crossing the configured cancellation threshold is flagged; one below it is not. Suspending a provider removes them from a discovery search that previously found them, while their existing `CONFIRMED` booking is unaffected and still actionable via OPS-002.
 
-**Out.** Automated (non-manual) delisting triggers — OPS-004 requirement is admin-actioned, not a bot.
+**Out.** Automated (non-manual) delisting triggers — OPS-004 requirement is admin-actioned, not a bot. OPS-006 funnel view (M5-P8b).
+
+### M5-P8b — OPS-006 funnel
+
+**Does**
+- New lightweight funnel-stage events (page-view/UI-driven, not booking-state-driven — design §6.4's core-events list doesn't enumerate these; per §9 M5-Q3, extends the existing M5-P1 outbox with new event types rather than a separate analytics pipe) emitted from `apps/web`: discovery (search/results view), profile view, slot selected — plus the existing booking created/confirmed/completed events already on the outbox from M5-P1.
+- Funnel view (`apps/admin`): discovery → profile view → slot selected → booking created → confirmed → completed, with per-stage drop-off and payment failures/expiries/declines each visible separately.
+
+**Tests.** Funnel counts match a scripted sequence of discovery→booking events exactly (deterministic integration test, not a dashboard eyeball check).
+
+**Out.** Nothing further — this closes out OPS-006.
 
 ### M5-P9 — A11Y/UX pass + both-locale E2E extension + alarms
 

@@ -622,4 +622,130 @@ describe('admin routes (M5-P6, OPS-002)', () => {
       16000,
     );
   });
+
+  it('a provider crossing the configured cancellation threshold is flagged in the standing view; one below it is not (OPS-004)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const currentApp = app;
+    const currentServices = services;
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const { providerId: quietProviderId, serviceId: quietServiceId } = await seedListedProvider(
+      app,
+      services,
+    );
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    async function bookAndCancel(pid: string, sid: string, hour: number, times: number) {
+      const created = await currentApp.request('/bookings', {
+        method: 'POST',
+        headers: {
+          cookie: customerSession,
+          'content-type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          providerId: pid,
+          serviceId: sid,
+          addressLine: 'admin standing street',
+          accessNotes: '',
+          lat: 32.08,
+          lng: 34.78,
+          slotStart: nearFutureSlot(hour),
+          paymentMethodId: 'pm_test',
+        }),
+      });
+      const booking = (await created.json()) as { id: string };
+      for (let i = 0; i < times; i += 1) {
+        await currentServices.pool.query(
+          `INSERT INTO booking.standing_events (booking_id, provider_id, kind)
+           VALUES ($1, $2, 'provider_cancel')`,
+          [booking.id, pid],
+        );
+      }
+    }
+
+    const threshold = services.config.standingCancellationThreshold;
+    await bookAndCancel(providerId, serviceId, 15, threshold);
+    await bookAndCancel(quietProviderId, quietServiceId, 16, threshold - 1);
+
+    const standing = await app.request('/admin/standing', { headers: { cookie: admin } });
+    expect(standing.status).toBe(200);
+    const standingBody = (await standing.json()) as {
+      providers: { providerId: string; cancellationCount: number; flagged: boolean }[];
+    };
+    const row = standingBody.providers.find((p) => p.providerId === providerId);
+    expect(row).toMatchObject({ cancellationCount: threshold, flagged: true });
+    const quietRow = standingBody.providers.find((p) => p.providerId === quietProviderId);
+    expect(quietRow).toMatchObject({ cancellationCount: threshold - 1, flagged: false });
+  });
+
+  it('suspending a provider removes them from discovery while their CONFIRMED booking stays untouched and actionable via OPS-002 (OPS-004)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    const created = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin suspend street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(17),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const booking = (await created.json()) as { id: string };
+    await app.request(`/bookings/${booking.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+
+    const before = await app.request('/discovery?lat=32.08&lng=34.78', {
+      headers: { cookie: customerSession },
+    });
+    const beforeBody = (await before.json()) as { providers: { id: string }[] };
+    expect(beforeBody.providers.map((p) => p.id)).toContain(providerId);
+
+    const suspend = await app.request(`/admin/providers/${providerId}/suspend`, {
+      method: 'POST',
+      headers: { cookie: admin },
+    });
+    expect(suspend.status).toBe(200);
+
+    const after = await app.request('/discovery?lat=32.08&lng=34.78', {
+      headers: { cookie: customerSession },
+    });
+    const afterBody = (await after.json()) as { providers: { id: string }[] };
+    expect(afterBody.providers.map((p) => p.id)).not.toContain(providerId);
+
+    const bookingDetail = await app.request(`/admin/bookings/${booking.id}`, {
+      headers: { cookie: admin },
+    });
+    const bookingDetailBody = (await bookingDetail.json()) as { booking: { state: string } };
+    expect(bookingDetailBody.booking.state).toBe('CONFIRMED');
+
+    const relist = await app.request(`/admin/providers/${providerId}/relist`, {
+      method: 'POST',
+      headers: { cookie: admin },
+    });
+    expect(relist.status).toBe(200);
+    const afterRelist = await app.request('/discovery?lat=32.08&lng=34.78', {
+      headers: { cookie: customerSession },
+    });
+    const afterRelistBody = (await afterRelist.json()) as { providers: { id: string }[] };
+    expect(afterRelistBody.providers.map((p) => p.id)).toContain(providerId);
+  });
 });

@@ -18,5 +18,16 @@
   "operations": "פעולות תשלום",
   "noOperations": "אין פעולות תשלום.",
   "noExceptions": "אין פעולות שנכשלו.",
-  "retry": "נסה שוב"
+  "retry": "נסה שוב",
+  "standing": "מעמד ספקים",
+  "noProviders": "אין עדיין ספקים מאושרים.",
+  "flagged": "מסומן לבדיקה",
+  "cancellations": "ביטולים",
+  "noShows": "אי-הגעות",
+  "responseMisses": "פספוסי מענה",
+  "completionRate": "שיעור השלמה",
+  "listed": "רשום",
+  "suspended": "מושעה",
+  "suspend": "השעה",
+  "relist": "רשום מחדש"
 }
