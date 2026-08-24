@@ -186,7 +186,7 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
   }
 
   if (account === undefined) {
-    return null;
+    return <p className="text-sm">{t('loading')}</p>;
   }
 
   if (result?.state === 'PENDING') {

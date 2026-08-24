@@ -71,6 +71,7 @@ jobs:
           pnpm exec nx affected -t lint
           pnpm check:i18n
           pnpm check:rtl
+          pnpm check:placeholder-text
 
       - name: 3. Typecheck
         run: pnpm exec nx run-many -t typecheck --exclude=web-e2e

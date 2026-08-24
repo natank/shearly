@@ -136,17 +136,22 @@ function QueueCard({ item, onChanged }: { item: QueueItem; onChanged: () => void
 export function VettingQueue() {
   const t = useTranslations('vetting');
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   async function refresh() {
     const res = await fetch('/api/admin/vetting', { credentials: 'include' });
     const body = (await res.json()) as { queue?: QueueItem[] };
     setQueue(body.queue ?? []);
+    setLoaded(true);
   }
 
   useEffect(() => {
     void refresh();
   }, []);
 
+  if (!loaded) {
+    return <p>{t('loading')}</p>;
+  }
   if (!queue.length) {
     return <p>{t('empty')}</p>;
   }

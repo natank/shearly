@@ -61,5 +61,6 @@
   "complete": "סימון כהושלם",
   "reportCustomerNoShow": "הלקוח לא הגיע",
   "cancelBooking": "ביטול ההזמנה",
-  "bookingActionFailed": "הפעולה לא הצליחה. נסו שוב."
+  "bookingActionFailed": "הפעולה לא הצליחה. נסו שוב.",
+  "loading": "טוען…"
 }

@@ -161,7 +161,7 @@ export function BookingHistory() {
   }, []);
 
   if (!loaded) {
-    return null;
+    return <p className="text-sm">{t('loading')}</p>;
   }
 
   return (

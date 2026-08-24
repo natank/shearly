@@ -50,7 +50,7 @@ export function DiscoveryProfile({ providerId }: { providerId: string }) {
     return <p className="text-sm">{t('outOfArea')}</p>;
   }
   if (!profile) {
-    return null;
+    return <p className="text-sm">{t('loading')}</p>;
   }
 
   return (

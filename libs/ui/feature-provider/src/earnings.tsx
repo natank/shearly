@@ -53,7 +53,7 @@ export function ProviderEarnings() {
   }, []);
 
   if (!loaded) {
-    return null;
+    return <p className="text-sm">{t('loading')}</p>;
   }
 
   return (
