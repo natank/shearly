@@ -184,7 +184,11 @@ test.describe('admin OPS-002 UI (M5-P6b)', () => {
     await expect(row).toBeVisible({ timeout: 15_000 });
 
     await row.click();
-    await expect(page.getByText(addressLine)).toBeVisible({ timeout: 15_000 });
+    // The row button's own label also contains addressLine (it's built from
+    // the same booking summary), so a bare getByText match is ambiguous
+    // once the detail panel opens — scope to the panel's "Address: ..."
+    // line specifically.
+    await expect(page.getByText(`Address: ${addressLine}`)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'State history' })).toBeVisible();
   });
 
