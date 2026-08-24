@@ -2,6 +2,7 @@ import pg from 'pg';
 import Stripe from 'stripe';
 import { ConflictError, NotFoundError, PaymentError } from '@shearly/shared-errors';
 import { insertOutboxEvent } from '@shearly/shared-events';
+import { fireAlarm } from '@shearly/shared-observability';
 
 export type OperationKind = 'authorize' | 'setup' | 'cancel' | 'capture' | 'refund';
 export type OperationState = 'pending' | 'succeeded' | 'failed';
@@ -306,6 +307,13 @@ export class AuthorizationService {
         amountMinor,
         currency,
       });
+      // OBS-004: named alarm — payment capture failure.
+      fireAlarm('paymentCaptureFailure', {
+        bookingId,
+        amountMinor,
+        currency,
+        message: (error as Error).message,
+      });
       throw new PaymentError('errors.payments.captureFailed');
     }
   }
@@ -584,6 +592,14 @@ export class AuthorizationService {
         amountMinor,
         currency,
         reason,
+      });
+      // OBS-004: named alarm — refund failure.
+      fireAlarm('refundFailure', {
+        bookingId,
+        amountMinor,
+        currency,
+        reason,
+        message: (error as Error).message,
       });
       throw new PaymentError('errors.payments.refundFailed');
     }

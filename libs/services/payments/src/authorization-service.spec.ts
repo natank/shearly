@@ -3,6 +3,10 @@ import pg from 'pg';
 import { AuthorizationService } from './authorization-service.js';
 import { migratePayments } from './migrate.js';
 
+function spyOnAlarms() {
+  return vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+}
+
 const url = process.env.DATABASE_URL;
 
 function fakeStripe() {
@@ -515,6 +519,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(pool, stripe, 6);
     const bookingId = crypto.randomUUID();
     const bookingAttemptId = crypto.randomUUID();
+    const alarms = spyOnAlarms();
     try {
       await svc.authorizeOrSetup(
         {
@@ -527,7 +532,20 @@ describe('AuthorizationService', () => {
         'pm_test',
       );
       await expect(svc.capture(bookingId, 20000, 'USD')).rejects.toMatchObject({ code: 'PAYMENT' });
+
+      // OBS-004: named alarm — payment capture failure.
+      const line = alarms.mock.calls
+        .map((call) => call[0] as string)
+        .find((call) => call.startsWith('ALARM:paymentCaptureFailure '));
+      expect(line).toBeDefined();
+      const alarmLine = line as string;
+      expect(JSON.parse(alarmLine.slice('ALARM:paymentCaptureFailure '.length))).toMatchObject({
+        bookingId,
+        amountMinor: 20000,
+        currency: 'USD',
+      });
     } finally {
+      alarms.mockRestore();
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
       await pool.end();
@@ -550,6 +568,7 @@ describe('AuthorizationService', () => {
     const svc = new AuthorizationService(pool, stripe, 6);
     const bookingId = crypto.randomUUID();
     const bookingAttemptId = crypto.randomUUID();
+    const alarms = spyOnAlarms();
     try {
       await svc.authorizeOrSetup(
         {
@@ -565,7 +584,21 @@ describe('AuthorizationService', () => {
       await expect(svc.refund(bookingId, 10000, 'late_cancel', 'USD')).rejects.toMatchObject({
         code: 'PAYMENT',
       });
+
+      // OBS-004: named alarm — refund failure.
+      const line = alarms.mock.calls
+        .map((call) => call[0] as string)
+        .find((call) => call.startsWith('ALARM:refundFailure '));
+      expect(line).toBeDefined();
+      const alarmLine = line as string;
+      expect(JSON.parse(alarmLine.slice('ALARM:refundFailure '.length))).toMatchObject({
+        bookingId,
+        amountMinor: 10000,
+        currency: 'USD',
+        reason: 'late_cancel',
+      });
     } finally {
+      alarms.mockRestore();
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
       await pool.end();

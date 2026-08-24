@@ -1,5 +1,6 @@
 import { dispatchDueOutboxEvents } from '@shearly/shared-events';
 import type { BookingStateChangedPayload } from '@shearly/shared-events';
+import { fireAlarm } from '@shearly/shared-observability';
 import type { AppServices } from './compose.js';
 
 /**
@@ -26,9 +27,24 @@ export async function runNotificationDispatchOnce(
     if (row.type !== 'BookingStateChanged') {
       return;
     }
-    await services.notifications.handleBookingStateChanged(
-      row.payload as BookingStateChangedPayload,
-    );
+    try {
+      await services.notifications.handleBookingStateChanged(
+        row.payload as BookingStateChangedPayload,
+      );
+    } catch (error) {
+      // OBS-004: named alarm — SES bounce rate (SMTP delivery failure is
+      // the local proxy: Mailhog has no bounce-webhook this app consumes,
+      // and a real SES integration's bounce notifications are an
+      // extraction-time concern per this alarm's own design note). Still
+      // rethrown so dispatchDueOutboxEvents' existing retry-on-attempts
+      // semantics are unaffected — this alarm observes, it doesn't change
+      // delivery behavior.
+      fireAlarm('sesBounceRate', {
+        eventType: row.type,
+        message: (error as Error).message,
+      });
+      throw error;
+    }
   });
 }
 

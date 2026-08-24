@@ -367,8 +367,16 @@ describe('notification dispatch (M5-P4)', () => {
       // The dispatch tick itself must not throw out of runNotificationDispatchOnce
       // — a handler failure is caught internally and recorded as `failed`,
       // never propagated as an uncaught rejection.
+      const alarms = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await runNotificationDispatchOnce(failingServices);
       expect(result.failed).toBeGreaterThanOrEqual(1);
+
+      // OBS-004: named alarm — SES bounce rate (local proxy: SMTP send failure).
+      const alarmLine = alarms.mock.calls
+        .map((call) => call[0] as string)
+        .find((call) => call.startsWith('ALARM:sesBounceRate '));
+      alarms.mockRestore();
+      expect(alarmLine).toBeDefined();
 
       const fetched = await failingApp.request(`/bookings/${body.id}`, {
         headers: { cookie: customerSession },

@@ -8,5 +8,9 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../shared/errors" }, { "path": "../../shared/events" }]
+  "references": [
+    { "path": "../../shared/errors" },
+    { "path": "../../shared/events" },
+    { "path": "../../shared/observability" }
+  ]
 }

@@ -6,8 +6,17 @@ import {
   type BookingEvent,
   type TransitionEffect,
 } from '@shearly/domain-booking-state-machine';
+import { createExpirySpikeDetector, fireAlarm } from '@shearly/shared-observability';
 import type { AppServices } from './compose.js';
 import { executeEffects } from './booking-effects.js';
+
+// OBS-004: booking expiry spike is a rate, not a single event — an
+// individual expiry is an expected, routine outcome (a provider simply
+// didn't respond in time); 5+ within a 10-minute window is the signal
+// something is actually wrong (e.g. a provider-side outage, or a bug in
+// the response-window logic itself). One detector per process, since the
+// poller itself is a per-process singleton (startDueWorkPoller below).
+const expirySpikeDetector = createExpirySpikeDetector(10 * 60 * 1000, 5);
 
 type DueBookingRow = QueryResultRow & {
   id: string;
@@ -231,6 +240,12 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
      FOR UPDATE SKIP LOCKED`,
     now,
   );
+  for (let i = 0; i < expiry.succeeded; i += 1) {
+    // OBS-004: named alarm — booking expiry spike.
+    if (expirySpikeDetector.record()) {
+      fireAlarm('bookingExpirySpike', { windowMs: 10 * 60 * 1000, threshold: 5 });
+    }
+  }
 
   const autoComplete = await claimAndTransitionBookings(
     services,
@@ -262,8 +277,12 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
       markDone: async () => undefined,
       markFailed: async () => undefined,
     },
-    async () => {
+    async (_client, row) => {
       // Deferred off-session confirm: not implemented, named hole (M4-Q4).
+      // Claiming a row here at all is therefore itself the anomaly — an
+      // orphaned authorization nothing in this environment should be
+      // able to produce yet.
+      fireAlarm('orphanAuthorizationReconcilerAction', { bookingId: row.booking_id });
     },
   );
 

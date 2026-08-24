@@ -380,4 +380,113 @@ describe('due-work poller', () => {
     expect(((await fetched.json()) as { state: string }).state).toBe('COMPLETED');
     expect(stripe.paymentIntents.capture).toHaveBeenCalled();
   });
+
+  it('OBS-004: does not fire the orphan-authorization alarm when nothing is claimable, and fires it when a stray row is', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const customerSession = await registerCustomer(app);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'poller street 5',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(13),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const body = (await res.json()) as { id: string };
+
+    const alarms = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await runDueWorkOnce(services);
+      expect(
+        alarms.mock.calls.some((call) =>
+          (call[0] as string).startsWith('ALARM:orphanAuthorizationReconcilerAction '),
+        ),
+      ).toBe(false);
+      alarms.mockClear();
+
+      // Nothing in this environment ever sets reauthorize_by on an
+      // AUTHORIZED row (M4-Q4 named hole) — backdating it here manufactures
+      // exactly the anomaly the alarm exists to catch.
+      await services.pool.query(
+        `UPDATE payments.authorizations SET reauthorize_by = now() - interval '1 minute' WHERE booking_id = $1`,
+        [body.id],
+      );
+
+      await runDueWorkOnce(services);
+      const line = alarms.mock.calls
+        .map((call) => call[0] as string)
+        .find((call) => call.startsWith('ALARM:orphanAuthorizationReconcilerAction '));
+      expect(line).toBeDefined();
+      const alarmLine = line as string;
+      expect(
+        JSON.parse(alarmLine.slice('ALARM:orphanAuthorizationReconcilerAction '.length)),
+      ).toMatchObject({
+        bookingId: body.id,
+      });
+    } finally {
+      alarms.mockRestore();
+    }
+  });
+
+  it('OBS-004: fires the booking-expiry-spike alarm once 5 expiries land within the 10-minute window, not before', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const bookingIds: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const { providerId, serviceId } = await seedListedProvider(app, services);
+      const customerSession = await registerCustomer(app);
+      const res = await app.request('/bookings', {
+        method: 'POST',
+        headers: {
+          cookie: customerSession,
+          'content-type': 'application/json',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          providerId,
+          serviceId,
+          addressLine: `poller spike street ${i}`,
+          accessNotes: '',
+          lat: 32.08,
+          lng: 34.78,
+          slotStart: nearFutureSlot(14 + i),
+          paymentMethodId: 'pm_test',
+        }),
+      });
+      const body = (await res.json()) as { id: string };
+      bookingIds.push(body.id);
+    }
+    await services.pool.query(
+      `UPDATE booking.bookings SET response_deadline = now() - interval '1 minute' WHERE id = ANY($1)`,
+      [bookingIds],
+    );
+
+    const alarms = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      for (let i = 0; i < 5; i += 1) {
+        await runDueWorkOnce(services);
+      }
+      const fired = alarms.mock.calls.some((call) =>
+        (call[0] as string).startsWith('ALARM:bookingExpirySpike '),
+      );
+      expect(fired).toBe(true);
+    } finally {
+      alarms.mockRestore();
+    }
+  });
 });
