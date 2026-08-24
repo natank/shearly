@@ -1092,4 +1092,46 @@ describe('AuthorizationService', () => {
       await pool.end();
     }
   });
+
+  it('failedOperationCount (OPS-006) counts failed capture/refund operations within a window, ignoring succeeded ones and rows outside it', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const windowStart = new Date('2026-06-01T00:00:00Z');
+    const windowEnd = new Date('2026-06-08T00:00:00Z');
+    const insertedKeys: string[] = [];
+    try {
+      const insertOp = async (
+        key: string,
+        kind: 'capture' | 'refund',
+        state: 'failed' | 'succeeded',
+        updatedAt: Date,
+      ) => {
+        await pool.query(
+          `INSERT INTO payments.operations (key, kind, booking_id, state, updated_at)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [key, kind, crypto.randomUUID(), state, updatedAt],
+        );
+        insertedKeys.push(key);
+      };
+      const inWindow = new Date('2026-06-03T00:00:00Z');
+      const outsideWindow = new Date('2026-05-01T00:00:00Z');
+      await insertOp(`capture:${crypto.randomUUID()}`, 'capture', 'failed', inWindow);
+      await insertOp(`refund:${crypto.randomUUID()}`, 'refund', 'failed', inWindow);
+      await insertOp(`capture:${crypto.randomUUID()}`, 'capture', 'succeeded', inWindow);
+      await insertOp(`capture:${crypto.randomUUID()}`, 'capture', 'failed', outsideWindow);
+
+      expect(await svc.failedOperationCount(windowStart, windowEnd)).toBe(2);
+    } finally {
+      await pool.query('DELETE FROM payments.operations WHERE key = ANY($1)', [insertedKeys]);
+      await pool.end();
+    }
+  });
 });

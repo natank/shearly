@@ -11,6 +11,9 @@ export type {
   ProviderApprovedPayload,
   AvailabilityChangedPayload,
   PayoutAccountReadyPayload,
+  DiscoverySearchedPayload,
+  ProfileViewedPayload,
+  SlotsViewedPayload,
 } from './event-catalog.js';
 
 export { insertOutboxEvent, dispatchDueOutboxEvents } from './outbox.js';

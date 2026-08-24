@@ -63,6 +63,32 @@ export type PayoutAccountReadyPayload = {
   accountId: string;
 };
 
+/**
+ * OPS-006 (M5-P8b, design §9 M5-Q3): funnel-stage events, page-view/UI-
+ * driven rather than booking-state-driven — §6.4's core-events list above
+ * doesn't enumerate these. Emitted from the discovery/profile/slots read
+ * routes into the same catalog.outbox every other catalog event uses (one
+ * event system, not a parallel analytics pipe, per M5-Q3's resolution).
+ * Scoped to per-stage counting only — no visitor/session id, since nothing
+ * in this plan item asks for full per-visitor funnel attribution and
+ * adding one would be new, privacy-sensitive tracking infrastructure
+ * beyond OPS-006's stated acceptance criterion (stage counts, not
+ * per-visitor journeys).
+ */
+export type DiscoverySearchedPayload = {
+  hasResults: boolean;
+};
+
+export type ProfileViewedPayload = {
+  providerId: string;
+};
+
+export type SlotsViewedPayload = {
+  providerId: string;
+  serviceId: string;
+  slotCount: number;
+};
+
 /** The core event catalog design §6.4 names. Each key is the event `type`
  * stored in an outbox row; the value is that event's payload shape. */
 export type EventCatalog = {
@@ -75,6 +101,9 @@ export type EventCatalog = {
   ProviderApproved: ProviderApprovedPayload;
   AvailabilityChanged: AvailabilityChangedPayload;
   PayoutAccountReady: PayoutAccountReadyPayload;
+  DiscoverySearched: DiscoverySearchedPayload;
+  ProfileViewed: ProfileViewedPayload;
+  SlotsViewed: SlotsViewedPayload;
 };
 
 export type EventType = keyof EventCatalog;

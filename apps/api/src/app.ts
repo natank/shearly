@@ -17,6 +17,7 @@ export function createApp(services: AppServices = compose()) {
   const catalog = createCatalogRoutes(services.identity, services.catalog, services.config, {
     availability: services.availability,
     payments: services.payments,
+    pool: services.pool,
   });
   const availability = createAvailabilityRoutes(
     services.identity,
@@ -28,6 +29,7 @@ export function createApp(services: AppServices = compose()) {
     availability: services.availability,
     ranker: services.ranker,
     config: services.config,
+    pool: services.pool,
   });
   const booking = createBookingRoutes({
     identity: services.identity,

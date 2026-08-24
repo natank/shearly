@@ -206,5 +206,36 @@ export function createAdminRoutes(input: {
     return c.json({ ok: true });
   });
 
+  // OPS-006: discovery → profile view → slot selected → booking created →
+  // confirmed → completed, with payment failures/expiries/declines each
+  // visible separately. `from`/`to` default to the trailing 7 days.
+  routes.get('/admin/funnel', async (c) => {
+    await requireAdmin(c, input.identity, input.config);
+    const toParam = c.req.query('to');
+    const fromParam = c.req.query('from');
+    const to = toParam ? new Date(toParam) : new Date();
+    const from = fromParam ? new Date(fromParam) : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [stages, bookingStats, failedPayments] = await Promise.all([
+      input.catalog.funnelStageCounts(from, to),
+      input.booking.funnelStats(from, to),
+      input.authorizations.failedOperationCount(from, to),
+    ]);
+
+    return c.json({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      discoverySearches: stages.discoverySearches,
+      profileViews: stages.profileViews,
+      slotViews: stages.slotViews,
+      bookingsCreated: bookingStats.created,
+      bookingsConfirmed: bookingStats.confirmed,
+      bookingsCompleted: bookingStats.completed,
+      bookingsDeclined: bookingStats.declined,
+      bookingsExpired: bookingStats.expired,
+      paymentFailures: failedPayments,
+    });
+  });
+
   return routes;
 }

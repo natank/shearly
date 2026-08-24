@@ -274,3 +274,59 @@ describe('CatalogService standing (OPS-004)', () => {
     }
   });
 });
+
+describe('CatalogService funnel (OPS-006)', () => {
+  const pool = url ? new pg.Pool({ connectionString: url }) : null;
+  let catalog: CatalogService | null = null;
+  let dir = '';
+
+  beforeAll(async () => {
+    if (!url || !pool) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migrateCatalog(url);
+    dir = await mkdtemp(join(tmpdir(), 'shearly-cat-'));
+    catalog = new CatalogService(pool, new FsDocumentStore(dir));
+  });
+
+  afterAll(async () => {
+    await pool?.end();
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('funnelStageCounts counts discovery/profile/slot events within a window, ignoring rows outside it and other event types', async () => {
+    if (!catalog || !pool) {
+      return;
+    }
+    const windowStart = new Date('2026-06-01T00:00:00Z');
+    const windowEnd = new Date('2026-06-08T00:00:00Z');
+    const inWindow = new Date('2026-06-03T00:00:00Z');
+    const outsideWindow = new Date('2026-05-01T00:00:00Z');
+    const insertedIds: string[] = [];
+    try {
+      const insert = async (type: string, at: Date) => {
+        const row = await pool.query<{ id: string }>(
+          `INSERT INTO catalog.outbox (type, payload, created_at) VALUES ($1, '{}'::jsonb, $2) RETURNING id`,
+          [type, at],
+        );
+        insertedIds.push(row.rows[0].id);
+      };
+      await insert('DiscoverySearched', inWindow);
+      await insert('DiscoverySearched', inWindow);
+      await insert('ProfileViewed', inWindow);
+      await insert('SlotsViewed', inWindow);
+      await insert('DiscoverySearched', outsideWindow);
+      await insert('ProviderApproved', inWindow); // unrelated event type
+
+      const counts = await catalog.funnelStageCounts(windowStart, windowEnd);
+      expect(counts).toEqual({ discoverySearches: 2, profileViews: 1, slotViews: 1 });
+    } finally {
+      await pool.query(`DELETE FROM catalog.outbox WHERE id = ANY($1)`, [insertedIds]);
+    }
+  });
+});
