@@ -739,11 +739,24 @@ describe('AuthorizationService', () => {
       // capture now resolves against the real booking id.
       await svc.capture(realBookingId, 20000, 'USD');
       expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
+
+      // OPS-002: payments.operations is rekeyed too, not just
+      // payments.authorizations — otherwise the original authorize
+      // operation would never show up under the booking's own detail view.
+      const rekeyedOps = await pool.query<{ kind: string }>(
+        'SELECT kind FROM payments.operations WHERE booking_id = $1 ORDER BY kind',
+        [realBookingId],
+      );
+      expect(rekeyedOps.rows.map((row) => row.kind)).toEqual(['authorize', 'capture']);
+      const staleOps = await pool.query('SELECT 1 FROM payments.operations WHERE booking_id = $1', [
+        bookingAttemptId,
+      ]);
+      expect(staleOps.rowCount).toBe(0);
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [
         realBookingId,
       ]);
-      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingAttemptId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [realBookingId]);
       await pool.end();
     }
   });
@@ -779,6 +792,158 @@ describe('AuthorizationService', () => {
     } finally {
       await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
       await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('failedOperations (OPS-002) lists a failed capture with the amount/currency needed to retry it', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    stripe.paymentIntents.capture = vi.fn(async () => {
+      throw new Error('capture_failed');
+    });
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await expect(svc.capture(bookingId, 20000, 'ILS')).rejects.toMatchObject({
+        code: 'PAYMENT',
+      });
+
+      const failed = await svc.failedOperations();
+      const row = failed.find((op) => op.bookingId === bookingId);
+      expect(row).toBeDefined();
+      expect(row?.kind).toBe('capture');
+      expect(row?.result.amountMinor).toBe(20000);
+      expect(row?.result.currency).toBe('ILS');
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('retryFailedOperation (OPS-002) retries a failed capture and succeeds once Stripe recovers, without double-capturing on a second retry', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    let shouldFail = true;
+    stripe.paymentIntents.capture = vi.fn(async () => {
+      if (shouldFail) {
+        throw new Error('capture_failed');
+      }
+      return { id: 'pi_captured' };
+    });
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await expect(svc.capture(bookingId, 20000, 'ILS')).rejects.toMatchObject({
+        code: 'PAYMENT',
+      });
+
+      shouldFail = false;
+      await svc.retryFailedOperation(`capture:${bookingId}`);
+      expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(2);
+
+      const auth = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(auth.rows[0].status).toBe('CAPTURED');
+
+      // Idempotent: a second retry against the now-succeeded operation must
+      // not call Stripe again — same guarantee class as M4's own
+      // capture/refund idempotency tests, exercised through the admin path.
+      await svc.retryFailedOperation(`capture:${bookingId}`);
+      expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(2);
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('retryFailedOperation throws NotFoundError for an unknown key, is a no-op for an already-succeeded operation, and throws ConflictError for one still pending', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    try {
+      await expect(svc.retryFailedOperation('capture:unknown')).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await svc.capture(bookingId, 20000, 'ILS');
+      // Already succeeded: a double-click retry must not throw or re-call
+      // Stripe, not surface a distinct failure mode.
+      await expect(svc.retryFailedOperation(`capture:${bookingId}`)).resolves.toBeUndefined();
+      expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(1);
+
+      // Still pending: a genuine conflict, not a retryable state.
+      await pool.query(
+        `INSERT INTO payments.operations (key, kind, booking_id, state)
+         VALUES ('capture:pending-example', 'capture', $1, 'pending')`,
+        [bookingId],
+      );
+      await expect(svc.retryFailedOperation('capture:pending-example')).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+    } finally {
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.query(`DELETE FROM payments.operations WHERE key = 'capture:pending-example'`);
       await pool.end();
     }
   });

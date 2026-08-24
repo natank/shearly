@@ -205,4 +205,59 @@ describe('BookingService', () => {
       await pool.end();
     }
   });
+
+  it('search filters by provider, state, and date range — customerEmail is exercised at the apps/api layer, where identity.accounts is reachable without crossing the service/service module boundary', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI (M4-P3)');
+      }
+      return;
+    }
+    await migrateBooking(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const svc = new BookingService(pool);
+    const providerId = crypto.randomUUID();
+    const otherProviderId = crypto.randomUUID();
+    try {
+      const inRange = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-05T09:00:00Z'),
+          slotEnd: new Date('2026-10-05T10:00:00Z'),
+        }),
+      );
+      const outOfRange = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-11-05T09:00:00Z'),
+          slotEnd: new Date('2026-11-05T10:00:00Z'),
+        }),
+      );
+      const otherProvider = await svc.create(
+        baseInput({
+          providerId: otherProviderId,
+          slotStart: new Date('2026-10-06T09:00:00Z'),
+          slotEnd: new Date('2026-10-06T10:00:00Z'),
+        }),
+      );
+      await svc.applyTransition(inRange.id, 'CONFIRMED', 'ProviderAccepts', 'provider');
+
+      const byProviderAndRange = await svc.search({
+        providerId,
+        from: new Date('2026-10-01T00:00:00Z'),
+        to: new Date('2026-10-31T23:59:59Z'),
+      });
+      expect(byProviderAndRange.map((b) => b.id)).toEqual([inRange.id]);
+
+      const byState = await svc.search({ state: 'CONFIRMED' });
+      expect(byState.map((b) => b.id)).toContain(inRange.id);
+      expect(byState.map((b) => b.id)).not.toContain(outOfRange.id);
+      expect(byState.map((b) => b.id)).not.toContain(otherProvider.id);
+    } finally {
+      await pool.query('DELETE FROM booking.bookings WHERE provider_id = ANY($1)', [
+        [providerId, otherProviderId],
+      ]);
+      await pool.end();
+    }
+  });
 });

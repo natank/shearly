@@ -1,0 +1,402 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { migrateIdentity } from '@shearly/services-identity/migrate';
+import { migrateCatalog } from '@shearly/services-provider-catalog/migrate';
+import { migrateAvailability } from '@shearly/services-availability/migrate';
+import { migratePayments } from '@shearly/services-payments/migrate';
+import { migrateBooking } from '@shearly/services-booking/migrate';
+import { createApp } from './app.js';
+import { compose, type ComposeOverrides } from './compose.js';
+
+type FakeStripe = NonNullable<ComposeOverrides['stripeClient']>;
+
+const url = process.env.DATABASE_URL;
+
+function cookie(res: Response): string {
+  return (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+}
+
+function uniqueIp(): string {
+  const bytes = crypto.randomUUID().replace(/-/g, '');
+  const a = parseInt(bytes.slice(0, 2), 16);
+  const b = parseInt(bytes.slice(2, 4), 16);
+  const c = parseInt(bytes.slice(4, 6), 16);
+  return `10.${a}.${b}.${c}`;
+}
+
+function nearFutureSlot(hour: number): string {
+  const date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  date.setUTCHours(hour, 0, 0, 0);
+  return date.toISOString();
+}
+
+function fakeStripe() {
+  let piCounter = 0;
+  return {
+    paymentIntents: {
+      create: vi.fn(async () => ({ id: `pi_${++piCounter}` })),
+      capture: vi.fn(async () => ({ id: 'pi_captured' })),
+      cancel: vi.fn(async () => ({ id: 'pi_cancelled' })),
+    },
+    setupIntents: { create: vi.fn(async () => ({ id: 'si_1' })) },
+    refunds: { create: vi.fn(async () => ({ id: 're_1' })) },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any as FakeStripe;
+}
+
+async function upload(
+  app: ReturnType<typeof createApp>,
+  session: string,
+  kind: string,
+  name: string,
+) {
+  const form = new FormData();
+  form.set('kind', kind);
+  form.set('file', new File([`bytes-${name}`], name, { type: 'image/png' }));
+  return app.request('/catalog/me/documents', {
+    method: 'POST',
+    headers: { cookie: session },
+    body: form,
+  });
+}
+
+async function seedListedProvider(
+  app: ReturnType<typeof createApp>,
+  services: ReturnType<typeof compose>,
+) {
+  const email = `prov-${crypto.randomUUID()}@example.com`;
+  const register = await app.request('/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': uniqueIp() },
+    body: JSON.stringify({
+      email,
+      password: 'long-enough-password',
+      role: 'provider',
+      locale: 'en',
+    }),
+  });
+  const session = cookie(register);
+  await upload(app, session, 'government_id', 'id.png');
+  await upload(app, session, 'credential', 'cred.png');
+  for (let i = 0; i < 5; i += 1) {
+    await upload(app, session, 'portfolio', `p${i}.png`);
+  }
+  await app.request('/catalog/me/submit', { method: 'POST', headers: { cookie: session } });
+
+  const me = (await (await app.request('/me', { headers: { cookie: session } })).json()) as {
+    account: { id: string };
+  };
+  const providerId = (await services.catalog.getByAccount(me.account.id))?.id as string;
+
+  const adminSignIn = await app.request('/auth/sign-in', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': uniqueIp() },
+    body: JSON.stringify({
+      email: services.config.adminSeedEmail,
+      password: services.config.adminSeedPassword,
+    }),
+  });
+  const admin = cookie(adminSignIn);
+  await app.request(`/admin/vetting/${providerId}/decision`, {
+    method: 'POST',
+    headers: { cookie: admin, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'interview', rationale: 'call' }),
+  });
+  await app.request(`/admin/vetting/${providerId}/decision`, {
+    method: 'POST',
+    headers: { cookie: admin, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'approve', rationale: 'ok' }),
+  });
+
+  await app.request('/catalog/me/profile', {
+    method: 'PATCH',
+    headers: { cookie: session, 'content-type': 'application/json' },
+    body: JSON.stringify({ bio: 'cuts', baseLat: 32.08, baseLng: 34.78, radiusKm: 10 }),
+  });
+  const serviceRes = await app.request('/catalog/me/services', {
+    method: 'POST',
+    headers: { cookie: session, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Cut',
+      description: '60',
+      durationMinutes: 60,
+      priceMinor: 20000,
+    }),
+  });
+  const service = (await serviceRes.json()) as { service: { id: string } };
+
+  await app.request('/availability/me/weekly', {
+    method: 'PUT',
+    headers: { cookie: session, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      rules: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 0, endMinute: 1439 })),
+    }),
+  });
+  await app.request('/payments/me/connect/stub-complete', {
+    method: 'POST',
+    headers: { cookie: session },
+  });
+  await app.request('/catalog/me/go-live', {
+    method: 'POST',
+    headers: { cookie: session, 'content-type': 'application/json' },
+    body: JSON.stringify({ listed: true }),
+  });
+
+  return { providerId, serviceId: service.service.id, providerSession: session };
+}
+
+async function registerCustomer(app: ReturnType<typeof createApp>) {
+  const email = `cust-${crypto.randomUUID()}@example.com`;
+  const register = await app.request('/auth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': uniqueIp() },
+    body: JSON.stringify({
+      email,
+      password: 'long-enough-password',
+      role: 'customer',
+      locale: 'en',
+    }),
+  });
+  return { session: cookie(register), email };
+}
+
+async function adminSession(
+  app: ReturnType<typeof createApp>,
+  services: ReturnType<typeof compose>,
+) {
+  const res = await app.request('/auth/sign-in', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': uniqueIp() },
+    body: JSON.stringify({
+      email: services.config.adminSeedEmail,
+      password: services.config.adminSeedPassword,
+    }),
+  });
+  return cookie(res);
+}
+
+describe('admin routes (M5-P6, OPS-002)', () => {
+  const stripe = fakeStripe();
+  const services = url ? compose(undefined, async () => undefined, { stripeClient: stripe }) : null;
+  const app = services ? createApp(services) : null;
+
+  beforeAll(async () => {
+    if (!url || !services) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migrateIdentity(url);
+    await migrateCatalog(url);
+    await migrateAvailability(url);
+    await migratePayments(url);
+    await migrateBooking(url);
+    await services.identity.ensureAdmin(
+      services.config.adminSeedEmail,
+      services.config.adminSeedPassword,
+    );
+  });
+
+  afterAll(async () => {
+    await services?.pool.end();
+  });
+
+  it('rejects a non-admin caller with AUTHORIZATION', async () => {
+    if (!app) {
+      return;
+    }
+    const { session: customerSession } = await registerCustomer(app);
+    const res = await app.request('/admin/bookings', { headers: { cookie: customerSession } });
+    expect(res.status).toBe(403);
+  });
+
+  it('searching by customer email, provider, state, and date range returns the right bookings', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId } = await seedListedProvider(app, services);
+    const { session: customerSession, email: customerEmail } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin search street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(9),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    const byEmail = await app.request(
+      `/admin/bookings?customerEmail=${encodeURIComponent(customerEmail)}`,
+      { headers: { cookie: admin } },
+    );
+    expect(byEmail.status).toBe(200);
+    const byEmailBody = (await byEmail.json()) as { bookings: { id: string }[] };
+    expect(byEmailBody.bookings.map((b) => b.id)).toContain(created.id);
+
+    const byProviderAndState = await app.request(
+      `/admin/bookings?providerId=${providerId}&state=PENDING`,
+      { headers: { cookie: admin } },
+    );
+    const byProviderAndStateBody = (await byProviderAndState.json()) as {
+      bookings: { id: string; state: string }[];
+    };
+    expect(byProviderAndStateBody.bookings.map((b) => b.id)).toContain(created.id);
+    expect(byProviderAndStateBody.bookings.every((b) => b.state === 'PENDING')).toBe(true);
+
+    const wrongEmail = await app.request(
+      `/admin/bookings?customerEmail=${encodeURIComponent(`nobody-${crypto.randomUUID()}@example.com`)}`,
+      { headers: { cookie: admin } },
+    );
+    const wrongEmailBody = (await wrongEmail.json()) as { bookings: { id: string }[] };
+    expect(wrongEmailBody.bookings.map((b) => b.id)).not.toContain(created.id);
+  });
+
+  it('a booking detail view shows state history and payment rows matching the DB directly', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin detail street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(10),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    await app.request(`/bookings/${created.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+
+    const detail = await app.request(`/admin/bookings/${created.id}`, {
+      headers: { cookie: admin },
+    });
+    expect(detail.status).toBe(200);
+    const body = (await detail.json()) as {
+      booking: { id: string; state: string };
+      stateTransitions: { fromState: string; toState: string; event: string }[];
+      operations: { key: string; kind: string; state: string }[];
+    };
+    expect(body.booking.id).toBe(created.id);
+    expect(body.booking.state).toBe('CONFIRMED');
+    expect(body.stateTransitions).toEqual([
+      expect.objectContaining({
+        fromState: 'PENDING',
+        toState: 'CONFIRMED',
+        event: 'ProviderAccepts',
+      }),
+    ]);
+    expect(body.operations.some((op) => op.kind === 'authorize' && op.state === 'succeeded')).toBe(
+      true,
+    );
+
+    const dbTransitions = await services.pool.query<{ event: string }>(
+      `SELECT event FROM booking.state_transitions WHERE booking_id = $1`,
+      [created.id],
+    );
+    expect(dbTransitions.rows.map((r) => r.event)).toEqual(
+      body.stateTransitions.map((t) => t.event),
+    );
+  });
+
+  it('a failed capture appears in the exceptions view; retrying it once succeeds; retrying the same operation twice is idempotent (no double-capture)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin exceptions street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(11),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    await app.request(`/bookings/${created.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+
+    vi.mocked(stripe.paymentIntents.capture).mockRejectedValueOnce(new Error('capture_failed'));
+
+    await expect(services.authorizations.capture(created.id, 20000, 'ILS')).rejects.toMatchObject({
+      code: 'PAYMENT',
+    });
+
+    const exceptions = await app.request('/admin/exceptions', { headers: { cookie: admin } });
+    expect(exceptions.status).toBe(200);
+    const exceptionsBody = (await exceptions.json()) as {
+      exceptions: { key: string; bookingId: string; kind: string }[];
+    };
+    const found = exceptionsBody.exceptions.find(
+      (e) => e.bookingId === created.id && e.kind === 'capture',
+    );
+    expect(found).toBeDefined();
+
+    const retry = await app.request(`/admin/exceptions/${found?.key}/retry`, {
+      method: 'POST',
+      headers: { cookie: admin },
+    });
+    expect(retry.status).toBe(200);
+    expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(2);
+
+    const stillListed = await app.request('/admin/exceptions', { headers: { cookie: admin } });
+    const stillListedBody = (await stillListed.json()) as {
+      exceptions: { bookingId: string }[];
+    };
+    expect(stillListedBody.exceptions.map((e) => e.bookingId)).not.toContain(created.id);
+
+    // Idempotent: retrying the now-succeeded operation again must not
+    // re-call Stripe (no double-capture).
+    const secondRetry = await app.request(`/admin/exceptions/${found?.key}/retry`, {
+      method: 'POST',
+      headers: { cookie: admin },
+    });
+    expect(secondRetry.status).toBe(200);
+    expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(2);
+  });
+});

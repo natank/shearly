@@ -224,6 +224,91 @@ export class BookingService {
     );
     return result.rows;
   }
+
+  /**
+   * OPS-002: admin search by customer email, provider id, state, and slot
+   * date range, any combination optional. `customerEmail` needs a join
+   * against `identity.accounts` — booking.customer_id references it
+   * directly, and a raw cross-schema read (not a cross-service import) is
+   * the same pattern NotificationService already uses to resolve its own
+   * booking context.
+   */
+  async search(filters: {
+    customerEmail?: string;
+    providerId?: string;
+    state?: BookingState;
+    from?: Date;
+    to?: Date;
+  }): Promise<BookingRow[]> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (filters.customerEmail) {
+      params.push(`%${filters.customerEmail.toLowerCase()}%`);
+      conditions.push(
+        `b.customer_id IN (SELECT id FROM identity.accounts WHERE lower(email) LIKE $${params.length})`,
+      );
+    }
+    if (filters.providerId) {
+      params.push(filters.providerId);
+      conditions.push(`b.provider_id = $${params.length}`);
+    }
+    if (filters.state) {
+      params.push(filters.state);
+      conditions.push(`b.state = $${params.length}`);
+    }
+    if (filters.from) {
+      params.push(filters.from);
+      conditions.push(`b.slot_start >= $${params.length}`);
+    }
+    if (filters.to) {
+      params.push(filters.to);
+      conditions.push(`b.slot_start <= $${params.length}`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const cols = BOOKING_COLS.split(',')
+      .map((col) => `b.${col.trim()}`)
+      .join(', ');
+    const result = await this.pool.query<BookingRow>(
+      `SELECT ${cols} FROM booking.bookings b ${where} ORDER BY b.slot_start DESC LIMIT 100`,
+      params,
+    );
+    return result.rows;
+  }
+
+  /** OPS-002: full state_transitions audit trail for one booking, oldest first. */
+  async history(bookingId: string): Promise<
+    {
+      fromState: BookingState;
+      toState: BookingState;
+      event: string;
+      actor: string;
+      reason: string | null;
+      createdAt: Date;
+    }[]
+  > {
+    const result = await this.pool.query<{
+      from_state: BookingState;
+      to_state: BookingState;
+      event: string;
+      actor: string;
+      reason: string | null;
+      created_at: Date;
+    }>(
+      `SELECT from_state, to_state, event, actor, reason, created_at
+       FROM booking.state_transitions WHERE booking_id = $1 ORDER BY created_at`,
+      [bookingId],
+    );
+    return result.rows.map((row) => ({
+      fromState: row.from_state,
+      toState: row.to_state,
+      event: row.event,
+      actor: row.actor,
+      reason: row.reason,
+      createdAt: row.created_at,
+    }));
+  }
 }
 
 function isExclusionViolation(error: unknown): boolean {
