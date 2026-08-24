@@ -23,11 +23,13 @@ export function ExceptionsView() {
   const t = useTranslations('admin');
   const [exceptions, setExceptions] = useState<Exception[]>([]);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   async function refresh() {
     const res = await fetch('/api/admin/exceptions', { credentials: 'include' });
     const body = (await res.json()) as { exceptions?: Exception[] };
     setExceptions(body.exceptions ?? []);
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -44,6 +46,9 @@ export function ExceptionsView() {
     await refresh();
   }
 
+  if (!loaded) {
+    return <p>{t('loading')}</p>;
+  }
   if (!exceptions.length) {
     return <p>{t('noExceptions')}</p>;
   }

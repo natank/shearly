@@ -16,6 +16,7 @@
     "test:geocoder-stub": "node --test tools/geocoder-stub/server.spec.mjs",
     "check:i18n": "node scripts/check-hardcoded-strings.mjs",
     "check:rtl": "node scripts/check-physical-styles.mjs apps/web apps/admin libs/ui",
+    "check:placeholder-text": "node scripts/check-placeholder-text.mjs",
     "e2e": "nx e2e web-e2e"
   },
   "devDependencies": {

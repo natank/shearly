@@ -26,5 +26,6 @@
   "slots": "Available times",
   "noSlots": "No times in this window. Next date will show when hours exist.",
   "minutes": "min",
-  "unknownAddress": "We could not find that address."
+  "unknownAddress": "We could not find that address.",
+  "loading": "Loading…"
 }

@@ -30,11 +30,13 @@ export function StandingView() {
   const t = useTranslations('admin');
   const [providers, setProviders] = useState<StandingRow[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   async function refresh() {
     const res = await fetch('/api/admin/standing', { credentials: 'include' });
     const body = (await res.json()) as { providers?: StandingRow[] };
     setProviders(body.providers ?? []);
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -52,6 +54,9 @@ export function StandingView() {
     await refresh();
   }
 
+  if (!loaded) {
+    return <p>{t('loading')}</p>;
+  }
   if (!providers.length) {
     return <p>{t('noProviders')}</p>;
   }

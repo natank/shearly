@@ -61,5 +61,6 @@
   "complete": "Mark complete",
   "reportCustomerNoShow": "Customer did not show",
   "cancelBooking": "Cancel booking",
-  "bookingActionFailed": "That did not go through. Try again."
+  "bookingActionFailed": "That did not go through. Try again.",
+  "loading": "Loading…"
 }
