@@ -77,7 +77,10 @@ M5-P4 NOT-001 wired: every transition emits an event; poller-claimed expiry/auto
 M5-P5 NOT-002 reminders: booking.reminders claimed and sent
     │
     ▼
-M5-P6 OPS-002 admin exceptions view + idempotent retry
+M5-P6 OPS-002 backend: search/detail/exceptions API + idempotent retry endpoint
+    │
+    ▼
+M5-P6b OPS-002 apps/admin UI over the M5-P6 API (split out at P6 write time — see that section)
     │
     ▼
 M5-P7 OPS-003 manual refund/no-show reversal + OPS-005 manual payout trigger
@@ -104,6 +107,7 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 | M5-P4 | | | |
 | M5-P5 | | | |
 | M5-P6 | | | |
+| M5-P6b | | | |
 | M5-P7 | | | |
 | M5-P8 | | | |
 | M5-P9 | | | |
@@ -170,17 +174,28 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 
 **Out.** SMS/push channels (NOT-003 only requires the abstraction exists, not that non-email channels ship).
 
-### M5-P6 — OPS-002 admin exceptions view
+### M5-P6 — OPS-002 backend: search/detail/exceptions API + retry
+
+**Split from the plan's original single P6, decided at write time:** OPS-002 bundles a search API, a detail API, an exceptions API, a retry endpoint, *and* three `apps/admin` screens over them — large enough that shipping it as one PR would make the diff hard to review and the failure surface hard to isolate. Every other M5 PR so far has shipped a complete, independently-testable backend slice; P6 keeps that shape by shipping the API + tests here and the UI as M5-P6b immediately after, rather than mixing both concerns in one review.
 
 **Does**
-- New `apps/admin` route: search bookings by customer/provider/state/date range (reuses `booking`'s existing tables, no new booking-side schema).
-- Booking detail: full `booking.state_transitions` history + linked `payments.operations`/`payments.ledger` rows for that booking.
-- A dedicated exceptions view: any `payments.operations` row in `failed` state (capture/refund failures specifically — the exact failure-surfacing OPS-002 requires) with a retry action.
-- Retry reuses the existing idempotent operation keys (PAY-002/003's `payments.operations` ledger, already built in M4) — this PR is a UI + retry-trigger endpoint over data that already exists correctly, not a new payments mechanism.
+- `GET /admin/bookings` — search by customer email, provider id, state, and date range (reuses `booking`'s existing tables, no new booking-side schema).
+- `GET /admin/bookings/:id` — detail: full `booking.state_transitions` history + linked `payments.operations`/`payments.ledger` rows for that booking.
+- `GET /admin/exceptions` — any `payments.operations` row in `failed` state (capture/refund failures specifically — the exact failure-surfacing OPS-002 requires).
+- `POST /admin/exceptions/:key/retry` — retry a failed operation. Reuses the existing idempotent operation keys (PAY-002/003's `payments.operations` ledger, already built in M4) by re-invoking `AuthorizationService.capture()`/`refund()` with the same booking/amount/reason the failed row recorded — not a new payments mechanism, a retry-trigger over data that already exists correctly.
 
-**Tests.** Searching by customer email/provider/state/date returns the right bookings. A booking detail view shows state history and payment rows matching the DB directly. A failed capture appears in the exceptions view; retrying it once succeeds; retrying the same failed operation twice is idempotent (no double-capture) — same idempotency guarantee class as M4's own capture/refund tests, exercised through the new admin-triggered path instead of the original saga path.
+**Tests.** Searching by customer email/provider/state/date returns the right bookings. A booking detail view's API response matches state history and payment rows in the DB directly. A failed capture appears in the exceptions list; retrying it once succeeds; retrying the same failed operation twice is idempotent (no double-capture) — same idempotency guarantee class as M4's own capture/refund tests, exercised through the new admin-triggered path instead of the original saga path.
 
-**Out.** Refund/no-show-reversal actions themselves (M5-P7 — this PR surfaces the exception, P7 gives the admin the tool to fix it).
+**Out.** The `apps/admin` UI itself (M5-P6b). Refund/no-show-reversal actions themselves (M5-P7 — this PR surfaces the exception, P7 gives the admin the tool to fix it).
+
+### M5-P6b — OPS-002 apps/admin UI
+
+**Does**
+- Three `apps/admin` screens over M5-P6's API: a booking search view, a booking detail view (state history + payment rows), and an exceptions view with a retry button per failed operation — same `account?.role === 'admin'` gate and client-fetch-over-rewrite-proxy pattern the existing `/vetting` screen already establishes.
+
+**Tests.** Same acceptance criteria as M5-P6's own test list, exercised through the UI rather than the API directly (Playwright): search returns matching results; opening a booking shows its history; a failed operation's retry button succeeds and the row updates.
+
+**Out.** Nothing further — this closes out OPS-002.
 
 ### M5-P7 — OPS-003 manual refund/reversal + OPS-005 manual payout
 

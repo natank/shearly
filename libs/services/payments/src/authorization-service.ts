@@ -1,6 +1,6 @@
 import pg from 'pg';
 import Stripe from 'stripe';
-import { PaymentError } from '@shearly/shared-errors';
+import { ConflictError, NotFoundError, PaymentError } from '@shearly/shared-errors';
 import { insertOutboxEvent } from '@shearly/shared-events';
 
 export type OperationKind = 'authorize' | 'setup' | 'cancel' | 'capture' | 'refund';
@@ -201,6 +201,16 @@ export class AuthorizationService {
       `UPDATE payments.authorizations SET booking_id = $2, updated_at = now() WHERE booking_id = $1`,
       [bookingAttemptId, bookingId],
     );
+    // OPS-002: payments.operations.booking_id is a denormalized reference
+    // column (idempotency itself is keyed by `key`, not booking_id) used
+    // for exactly this kind of "every operation for this booking" lookup —
+    // without rekeying it too, the authorize/setup row stays permanently
+    // attributed to the saga's own attempt id and never shows up in a
+    // booking's own operations history.
+    await this.pool.query(
+      `UPDATE payments.operations SET booking_id = $2, updated_at = now() WHERE booking_id = $1`,
+      [bookingAttemptId, bookingId],
+    );
   }
 
   /** Cancels an orphaned or declined authorization. Idempotent against retry. */
@@ -250,7 +260,11 @@ export class AuthorizationService {
     );
     const paymentIntentId = auth.rows[0]?.stripe_payment_intent_id;
     if (!paymentIntentId) {
-      await this.completeOperation(key, 'failed', { message: 'no authorization on file' });
+      await this.completeOperation(key, 'failed', {
+        message: 'no authorization on file',
+        amountMinor,
+        currency,
+      });
       throw new PaymentError('errors.payments.noAuthorization');
     }
 
@@ -262,7 +276,7 @@ export class AuthorizationService {
           { idempotencyKey: key },
         );
       }
-      await this.completeOperation(key, 'succeeded', { amountMinor });
+      await this.completeOperation(key, 'succeeded', { amountMinor, currency });
       const client = await this.pool.connect();
       try {
         await client.query('BEGIN');
@@ -283,7 +297,15 @@ export class AuthorizationService {
         client.release();
       }
     } catch (error) {
-      await this.completeOperation(key, 'failed', { message: (error as Error).message });
+      // OPS-002: the exceptions view and its retry endpoint need the
+      // amount/currency that was actually attempted, not just the error —
+      // this is the only place that context is recorded once capture()
+      // itself has failed.
+      await this.completeOperation(key, 'failed', {
+        message: (error as Error).message,
+        amountMinor,
+        currency,
+      });
       throw new PaymentError('errors.payments.captureFailed');
     }
   }
@@ -307,7 +329,12 @@ export class AuthorizationService {
     );
     const paymentIntentId = auth.rows[0]?.stripe_payment_intent_id;
     if (!paymentIntentId) {
-      await this.completeOperation(key, 'failed', { message: 'no authorization on file' });
+      await this.completeOperation(key, 'failed', {
+        message: 'no authorization on file',
+        amountMinor,
+        currency,
+        reason,
+      });
       throw new PaymentError('errors.payments.noAuthorization');
     }
 
@@ -318,7 +345,7 @@ export class AuthorizationService {
           { idempotencyKey: key },
         );
       }
-      await this.completeOperation(key, 'succeeded', { amountMinor, reason });
+      await this.completeOperation(key, 'succeeded', { amountMinor, currency, reason });
       const client = await this.pool.connect();
       try {
         await client.query('BEGIN');
@@ -340,8 +367,143 @@ export class AuthorizationService {
         client.release();
       }
     } catch (error) {
-      await this.completeOperation(key, 'failed', { message: (error as Error).message });
+      // OPS-002: same reasoning as capture()'s failure branch above — the
+      // exceptions view and retry endpoint need the attempted
+      // amount/currency/reason, not just the error message.
+      await this.completeOperation(key, 'failed', {
+        message: (error as Error).message,
+        amountMinor,
+        currency,
+        reason,
+      });
       throw new PaymentError('errors.payments.refundFailed');
     }
+  }
+
+  /** OPS-002: every operation recorded for one booking, oldest first — the booking detail view's payment-side data. */
+  async operationsForBooking(bookingId: string): Promise<
+    {
+      key: string;
+      kind: OperationKind;
+      state: OperationState;
+      result: unknown;
+      createdAt: Date;
+      updatedAt: Date;
+    }[]
+  > {
+    const result = await this.pool.query<{
+      key: string;
+      kind: OperationKind;
+      state: OperationState;
+      result: unknown;
+      created_at: Date;
+      updated_at: Date;
+    }>(
+      `SELECT key, kind, state, result, created_at, updated_at
+       FROM payments.operations WHERE booking_id = $1 ORDER BY created_at`,
+      [bookingId],
+    );
+    return result.rows.map((row) => ({
+      key: row.key,
+      kind: row.kind,
+      state: row.state,
+      result: row.result,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  /**
+   * OPS-002: every `failed` capture/refund operation, most recent first —
+   * the exceptions view's data source. `result` carries the amount/
+   * currency/reason recorded at failure time (see capture()/refund()'s own
+   * failure branches), which the retry endpoint replays.
+   */
+  async failedOperations(): Promise<
+    {
+      key: string;
+      kind: OperationKind;
+      bookingId: string;
+      result: { message?: string; amountMinor?: number; currency?: string; reason?: string };
+      updatedAt: Date;
+    }[]
+  > {
+    const result = await this.pool.query<{
+      key: string;
+      kind: OperationKind;
+      booking_id: string;
+      result: {
+        message?: string;
+        amountMinor?: number;
+        currency?: string;
+        reason?: string;
+      } | null;
+      updated_at: Date;
+    }>(
+      `SELECT key, kind, booking_id, result, updated_at
+       FROM payments.operations
+       WHERE state = 'failed' AND kind IN ('capture', 'refund')
+       ORDER BY updated_at DESC
+       LIMIT 100`,
+    );
+    return result.rows.map((row) => ({
+      key: row.key,
+      kind: row.kind,
+      bookingId: row.booking_id,
+      result: row.result ?? {},
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  /**
+   * OPS-002: retries a failed capture/refund by re-invoking the same
+   * capture()/refund() method with the amount/currency/reason recorded at
+   * failure time — the idempotency key is deterministic (`capture:<id>` or
+   * `refund:<id>:<reason>`), so this is the same call the original saga
+   * would have made, not a new mechanism. Throws if the operation isn't
+   * found, isn't in `failed` state, or its recorded result is missing the
+   * amount needed to replay it.
+   */
+  async retryFailedOperation(key: string): Promise<void> {
+    const existing = await this.pool.query<{
+      kind: OperationKind;
+      booking_id: string;
+      state: OperationState;
+      result: { amountMinor?: number; currency?: string; reason?: string } | null;
+    }>(`SELECT kind, booking_id, state, result FROM payments.operations WHERE key = $1`, [key]);
+    const row = existing.rows[0];
+    if (!row) {
+      throw new NotFoundError('errors.payments.operationNotFound');
+    }
+    // Idempotent against a double-click: an operation this retry (or a
+    // concurrent one) already moved to `succeeded` is a no-op, not an
+    // error — the plan's own acceptance criterion is "retrying the same
+    // failed operation twice is idempotent (no double-capture)," and a
+    // second click landing after the first has already resolved is exactly
+    // that case, not a distinct failure mode admins need surfaced.
+    if (row.state === 'succeeded') {
+      return;
+    }
+    if (row.state !== 'failed') {
+      throw new ConflictError('errors.payments.operationNotFailed');
+    }
+    const amountMinor = row.result?.amountMinor;
+    const currency = row.result?.currency;
+    if (amountMinor === undefined || !currency) {
+      throw new ConflictError('errors.payments.operationNotRetryable');
+    }
+    if (row.kind === 'capture') {
+      await this.capture(row.booking_id, amountMinor, currency);
+      return;
+    }
+    if (row.kind === 'refund') {
+      const reason = row.result?.reason;
+      if (!reason) {
+        throw new ConflictError('errors.payments.operationNotRetryable');
+      }
+      await this.refund(row.booking_id, amountMinor, reason, currency);
+      return;
+    }
+    throw new ConflictError('errors.payments.operationNotRetryable');
   }
 }

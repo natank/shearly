@@ -8,6 +8,7 @@ import { createDiscoveryRoutes } from './discovery-routes.js';
 import { createBookingRoutes } from './booking-routes.js';
 import { createBookingProviderRoutes } from './booking-provider-routes.js';
 import { createWebhooksRoutes } from './webhooks-routes.js';
+import { createAdminRoutes } from './admin-routes.js';
 import { compose, type AppServices } from './compose.js';
 
 export function createApp(services: AppServices = compose()) {
@@ -53,6 +54,13 @@ export function createApp(services: AppServices = compose()) {
     authorizations: services.authorizations,
     config: services.config,
   });
+  const admin = createAdminRoutes({
+    identity: services.identity,
+    booking: services.booking,
+    authorizations: services.authorizations,
+    ledger: services.ledger,
+    config: services.config,
+  });
 
   app.get('/health', (c) => c.json({ ok: true }));
   // Stripe calls the bare domain, never the /api-prefixed path — mounted at
@@ -70,6 +78,8 @@ export function createApp(services: AppServices = compose()) {
   app.route('/api', booking);
   app.route('/', bookingProvider);
   app.route('/api', bookingProvider);
+  app.route('/', admin);
+  app.route('/api', admin);
   app.onError((err, c) => {
     if (err instanceof AppError) {
       return c.json(toErrorBody(err), err.httpStatus as ContentfulStatusCode);
