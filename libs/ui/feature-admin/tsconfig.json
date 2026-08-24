@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../../dist/out-tsc/libs/ui/feature-admin",
+    "rootDir": "src",
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "lib": ["dom", "ES2022"],
+    "declaration": true,
+    "composite": true,
+    "tsBuildInfoFile": "../../../dist/out-tsc/libs/ui/feature-admin/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [{ "path": "../design-system" }]
+}

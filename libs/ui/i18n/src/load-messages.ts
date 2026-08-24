@@ -30,6 +30,16 @@ export async function loadVettingMessages(locale: Locale) {
   }
 }
 
+export async function loadAdminMessages(locale: Locale) {
+  switch (locale) {
+    case 'he':
+      return (await import('./messages/he/admin.json')).default;
+    case 'en':
+    default:
+      return (await import('./messages/en/admin.json')).default;
+  }
+}
+
 export async function loadDiscoveryMessages(locale: Locale) {
   switch (locale) {
     case 'he':
