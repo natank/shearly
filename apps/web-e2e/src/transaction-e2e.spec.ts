@@ -162,8 +162,8 @@ test('the transaction loop: book, fund, accept, complete, cancel — both locale
   await expect(page.getByRole('heading', { name: 'אישור ההזמנה' })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByPlaceholder('תווית (למשל: בית)').fill('בית');
-  await page.getByPlaceholder('כתובת').fill('tel aviv');
+  await page.getByLabel('תווית (למשל: בית)').fill('בית');
+  await page.getByLabel('כתובת', { exact: true }).fill('tel aviv');
   await page.getByRole('button', { name: 'שמירת כתובת' }).click();
   await expect(page.getByRole('button', { name: 'אישור ותשלום' })).toBeEnabled({
     timeout: 15_000,

@@ -15,14 +15,14 @@ export default async function BookPage({
 
   if (!query.slotStart) {
     return (
-      <main className="p-4">
+      <main id="main-content" className="p-4">
         <p className="text-sm">{t('missingSlot')}</p>
       </main>
     );
   }
 
   return (
-    <main className="p-4">
+    <main id="main-content" className="p-4">
       <BookingConfirm
         selection={{
           providerId,
