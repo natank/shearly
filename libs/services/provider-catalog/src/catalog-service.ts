@@ -259,6 +259,16 @@ export class CatalogService {
     return result.rows;
   }
 
+  /** OPS-004: every approved provider (listed or already suspended/delisted) — the standing view's population. */
+  async listApproved(): Promise<ProviderRow[]> {
+    const result = await this.pool.query<ProviderRow>(
+      `SELECT ${PROVIDER_COLS} FROM catalog.providers
+       WHERE status = 'approved'
+       ORDER BY created_at ASC`,
+    );
+    return result.rows;
+  }
+
   async decide(
     actorAccountId: string,
     providerId: string,
@@ -463,6 +473,25 @@ export class CatalogService {
        RETURNING ${PROVIDER_COLS}`,
       [provider.id, listed],
     );
+    return updated.rows[0];
+  }
+
+  /**
+   * OPS-004: admin suspend/delist (listed = false) or re-list (listed =
+   * true), addressed by provider id rather than the acting account's own
+   * — setListed() above is provider self-service and enforces ownership,
+   * which an admin acting on someone else's listing must not be gated by.
+   * Route-level requireAdmin() is what authorizes this, not this method.
+   */
+  async adminSetListed(providerId: string, listed: boolean): Promise<ProviderRow> {
+    const updated = await this.pool.query<ProviderRow>(
+      `UPDATE catalog.providers SET listed = $2, updated_at = now() WHERE id = $1
+       RETURNING ${PROVIDER_COLS}`,
+      [providerId, listed],
+    );
+    if (!updated.rows[0]) {
+      throw new NotFoundError('catalog.providerNotFound');
+    }
     return updated.rows[0];
   }
 

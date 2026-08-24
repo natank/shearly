@@ -212,3 +212,65 @@ describe('CatalogService notifications (M2-T02 regression)', () => {
     expect(sent).toHaveLength(0);
   });
 });
+
+describe('CatalogService standing (OPS-004)', () => {
+  const pool = url ? new pg.Pool({ connectionString: url }) : null;
+  let catalog: CatalogService | null = null;
+  let dir = '';
+
+  beforeAll(async () => {
+    if (!url || !pool) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migrateCatalog(url);
+    dir = await mkdtemp(join(tmpdir(), 'shearly-cat-'));
+    catalog = new CatalogService(pool, new FsDocumentStore(dir));
+  });
+
+  afterAll(async () => {
+    await pool?.end();
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('listApproved returns approved providers regardless of listed state; adminSetListed toggles listing without ownership checks', async () => {
+    if (!catalog || !pool) {
+      return;
+    }
+    const approvedAccountId = crypto.randomUUID();
+    const draftAccountId = crypto.randomUUID();
+    try {
+      const approvedProvider = await catalog.ensureDraft(approvedAccountId);
+      await pool.query(
+        `UPDATE catalog.providers SET status = 'approved', listed = true WHERE id = $1`,
+        [approvedProvider.id],
+      );
+      await catalog.ensureDraft(draftAccountId);
+
+      const approved = await catalog.listApproved();
+      const ids = approved.map((p) => p.id);
+      expect(ids).toContain(approvedProvider.id);
+
+      // adminSetListed acts by provider id directly — no ownership check
+      // like setListed()'s own requireOwn() gate, since the acting admin
+      // is never the provider's own account.
+      const suspended = await catalog.adminSetListed(approvedProvider.id, false);
+      expect(suspended.listed).toBe(false);
+
+      const relisted = await catalog.adminSetListed(approvedProvider.id, true);
+      expect(relisted.listed).toBe(true);
+
+      await expect(catalog.adminSetListed(crypto.randomUUID(), false)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    } finally {
+      await pool.query('DELETE FROM catalog.providers WHERE account_id = ANY($1)', [
+        [approvedAccountId, draftAccountId],
+      ]);
+    }
+  });
+});

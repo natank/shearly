@@ -18,5 +18,16 @@
   "operations": "Payment operations",
   "noOperations": "No payment operations.",
   "noExceptions": "No failed operations.",
-  "retry": "Retry"
+  "retry": "Retry",
+  "standing": "Standing",
+  "noProviders": "No approved providers yet.",
+  "flagged": "Flagged for review",
+  "cancellations": "Cancellations",
+  "noShows": "No-shows",
+  "responseMisses": "Response misses",
+  "completionRate": "Completion rate",
+  "listed": "Listed",
+  "suspended": "Suspended",
+  "suspend": "Suspend",
+  "relist": "Relist"
 }

@@ -160,5 +160,51 @@ export function createAdminRoutes(input: {
     return c.json({ payout });
   });
 
+  // OPS-004: per-provider standing metrics for every approved provider,
+  // flagged when cancellationCount crosses the configured threshold.
+  routes.get('/admin/standing', async (c) => {
+    await requireAdmin(c, input.identity, input.config);
+    const providers = await input.catalog.listApproved();
+    const stats = await input.booking.standingStats(providers.map((provider) => provider.id));
+    const threshold = input.config.standingCancellationThreshold;
+    return c.json({
+      providers: providers.map((provider) => {
+        const stat = stats.get(provider.id) ?? {
+          cancellationCount: 0,
+          noShowCount: 0,
+          responseMissCount: 0,
+          totalBookings: 0,
+          completedCount: 0,
+        };
+        return {
+          providerId: provider.id,
+          displayName: provider.display_name,
+          listed: provider.listed,
+          cancellationCount: stat.cancellationCount,
+          noShowCount: stat.noShowCount,
+          responseMissCount: stat.responseMissCount,
+          totalBookings: stat.totalBookings,
+          completionRate: stat.totalBookings > 0 ? stat.completedCount / stat.totalBookings : null,
+          flagged: stat.cancellationCount >= threshold,
+        };
+      }),
+    });
+  });
+
+  // OPS-004: admin suspend/delist — removes the provider from discovery
+  // (same listed=false mechanism the provider's own go-live toggle uses)
+  // while explicitly leaving any in-flight CONFIRMED booking untouched.
+  routes.post('/admin/providers/:providerId/suspend', async (c) => {
+    await requireAdmin(c, input.identity, input.config);
+    await input.catalog.adminSetListed(c.req.param('providerId'), false);
+    return c.json({ ok: true });
+  });
+
+  routes.post('/admin/providers/:providerId/relist', async (c) => {
+    await requireAdmin(c, input.identity, input.config);
+    await input.catalog.adminSetListed(c.req.param('providerId'), true);
+    return c.json({ ok: true });
+  });
+
   return routes;
 }

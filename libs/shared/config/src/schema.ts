@@ -39,6 +39,7 @@ export const envSchema = z.object({
   CANCEL_FULL_REFUND_HOURS: z.coerce.number().positive().default(12),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
   REMINDER_WINDOW_HOURS: z.coerce.number().positive().default(24),
+  STANDING_CANCELLATION_THRESHOLD: z.coerce.number().int().positive().default(3),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -82,6 +83,7 @@ export type AppConfig = {
   cancelFullRefundHours: number;
   pollIntervalMs: number;
   reminderWindowHours: number;
+  standingCancellationThreshold: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -124,5 +126,6 @@ export function toAppConfig(env: Env): AppConfig {
     cancelFullRefundHours: env.CANCEL_FULL_REFUND_HOURS,
     pollIntervalMs: env.POLL_INTERVAL_MS,
     reminderWindowHours: env.REMINDER_WINDOW_HOURS,
+    standingCancellationThreshold: env.STANDING_CANCELLATION_THRESHOLD,
   };
 }
