@@ -1,10 +1,12 @@
 import { Hono, type Context } from 'hono';
+import type pg from 'pg';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
 import type { CatalogService, DocKind } from '@shearly/services-provider-catalog';
 import type { AvailabilityService } from '@shearly/services-availability';
 import type { ConnectService } from '@shearly/services-payments';
 import { NotFoundError, ValidationError } from '@shearly/shared-errors';
+import { insertOutboxEvent } from '@shearly/shared-events';
 import { evaluateGoLive } from './go-live.js';
 import { requireAdmin, requireProvider } from './session.js';
 
@@ -24,7 +26,7 @@ export function createCatalogRoutes(
   identity: IdentityService,
   catalog: CatalogService,
   config: AppConfig,
-  extras?: { availability: AvailabilityService; payments: ConnectService },
+  extras?: { availability: AvailabilityService; payments: ConnectService; pool: pg.Pool },
 ) {
   const routes = new Hono();
 
@@ -212,6 +214,13 @@ export function createCatalogRoutes(
         end: slot.end.toISOString(),
       }));
     }
+    // OPS-006 (M5-P8b): funnel-stage event, best-effort — a real profile
+    // page must never be blocked by a funnel-counting write failing.
+    if (extras) {
+      await insertOutboxEvent(extras.pool, 'catalog', 'ProfileViewed', {
+        providerId: provider.id,
+      }).catch(() => undefined);
+    }
     return c.json({
       provider: {
         id: provider.id,
@@ -273,6 +282,13 @@ export function createCatalogRoutes(
       to,
       now: new Date(),
     });
+    // OPS-006 (M5-P8b): funnel-stage event, best-effort — real slot data
+    // must never be blocked by a funnel-counting write failing.
+    await insertOutboxEvent(extras.pool, 'catalog', 'SlotsViewed', {
+      providerId: provider.id,
+      serviceId: service.id,
+      slotCount: slots.length,
+    }).catch(() => undefined);
     return c.json({
       slots: slots.map((slot) => ({
         start: slot.start.toISOString(),

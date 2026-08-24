@@ -401,6 +401,18 @@ export class AuthorizationService {
     }));
   }
 
+  /** OPS-006 (M5-P8b): count of failed capture/refund operations within a window — the funnel view's "payment failures" stage. */
+  async failedOperationCount(from: Date, to: Date): Promise<number> {
+    const result = await this.pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n
+       FROM payments.operations
+       WHERE state = 'failed' AND kind IN ('capture', 'refund')
+         AND updated_at >= $1 AND updated_at < $2`,
+      [from, to],
+    );
+    return Number(result.rows[0]?.n ?? 0);
+  }
+
   private async recordManualAction(
     bookingId: string,
     kind: 'refund' | 'no_show_reversal',

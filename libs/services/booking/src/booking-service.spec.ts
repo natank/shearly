@@ -327,4 +327,85 @@ describe('BookingService', () => {
       await pool.end();
     }
   });
+
+  it('funnelStats (OPS-006) counts created/confirmed/completed/declined/expired within a window, ignoring rows outside it', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migrateBooking(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const svc = new BookingService(pool);
+    const providerId = crypto.randomUUID();
+    const windowStart = new Date('2026-06-01T00:00:00Z');
+    const windowEnd = new Date('2026-06-08T00:00:00Z');
+    try {
+      const confirmed = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-05T09:00:00Z'),
+          slotEnd: new Date('2026-10-05T10:00:00Z'),
+        }),
+      );
+      const completed = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-06T09:00:00Z'),
+          slotEnd: new Date('2026-10-06T10:00:00Z'),
+        }),
+      );
+      const declined = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-07T09:00:00Z'),
+          slotEnd: new Date('2026-10-07T10:00:00Z'),
+        }),
+      );
+      await svc.applyTransition(confirmed.id, 'CONFIRMED', 'ProviderAccepts', 'provider');
+      await svc.applyTransition(completed.id, 'CONFIRMED', 'ProviderAccepts', 'provider');
+      await svc.applyTransition(completed.id, 'COMPLETED', 'ProviderCompletes', 'provider');
+      await svc.applyTransition(declined.id, 'DECLINED', 'ProviderDeclines', 'provider');
+
+      // All bookings created "now" (outside the fixed 2026-06 window) —
+      // backdate their created_at (and the transitions' created_at) into
+      // the window so the query has something to actually filter on.
+      await pool.query(
+        `UPDATE booking.bookings SET created_at = $2
+         WHERE id = ANY($1)`,
+        [[confirmed.id, completed.id, declined.id], windowStart],
+      );
+      await pool.query(
+        `UPDATE booking.state_transitions SET created_at = $2
+         WHERE booking_id = ANY($1)`,
+        [[confirmed.id, completed.id, declined.id], windowStart],
+      );
+
+      // A booking entirely outside the window must not be counted.
+      const outside = await svc.create(
+        baseInput({
+          providerId,
+          slotStart: new Date('2026-10-08T09:00:00Z'),
+          slotEnd: new Date('2026-10-08T10:00:00Z'),
+        }),
+      );
+      await pool.query(`UPDATE booking.bookings SET created_at = $2 WHERE id = $1`, [
+        outside.id,
+        new Date('2026-05-01T00:00:00Z'),
+      ]);
+
+      const stats = await svc.funnelStats(windowStart, windowEnd);
+      expect(stats).toEqual({
+        created: 3,
+        confirmed: 2,
+        completed: 1,
+        declined: 1,
+        expired: 0,
+      });
+    } finally {
+      await pool.query('DELETE FROM booking.bookings WHERE provider_id = $1', [providerId]);
+      await pool.end();
+    }
+  });
 });

@@ -29,5 +29,17 @@
   "listed": "רשום",
   "suspended": "מושעה",
   "suspend": "השעה",
-  "relist": "רשום מחדש"
+  "relist": "רשום מחדש",
+  "funnel": "משפך המרה",
+  "loading": "טוען…",
+  "discoverySearches": "חיפושים",
+  "profileViews": "צפיות בפרופיל",
+  "slotViews": "צפיות בזמינות",
+  "bookingsCreated": "הזמנות שנוצרו",
+  "bookingsConfirmed": "הזמנות שאושרו",
+  "bookingsCompleted": "הזמנות שהושלמו",
+  "bookingsDeclined": "הזמנות שנדחו",
+  "bookingsExpired": "הזמנות שפגו",
+  "paymentFailures": "תשלומים שנכשלו",
+  "dropOff": "נשירה"
 }

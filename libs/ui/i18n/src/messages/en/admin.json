@@ -29,5 +29,17 @@
   "listed": "Listed",
   "suspended": "Suspended",
   "suspend": "Suspend",
-  "relist": "Relist"
+  "relist": "Relist",
+  "funnel": "Funnel",
+  "loading": "Loading…",
+  "discoverySearches": "Discovery searches",
+  "profileViews": "Profile views",
+  "slotViews": "Slot views",
+  "bookingsCreated": "Bookings created",
+  "bookingsConfirmed": "Bookings confirmed",
+  "bookingsCompleted": "Bookings completed",
+  "bookingsDeclined": "Bookings declined",
+  "bookingsExpired": "Bookings expired",
+  "paymentFailures": "Payment failures",
+  "dropOff": "Drop-off"
 }

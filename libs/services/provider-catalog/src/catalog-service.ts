@@ -531,6 +531,33 @@ export class CatalogService {
     }
     return provider;
   }
+
+  /**
+   * OPS-006 (M5-P8b): the discovery→profile-view→slot-selected half of the
+   * funnel — counts rows in catalog.outbox by event type within the window.
+   * These rows are never dispatched (nothing consumes them; they're
+   * terminal counting facts, not at-least-once-delivery events), so
+   * dispatched_at is deliberately ignored here rather than filtered on.
+   */
+  async funnelStageCounts(
+    from: Date,
+    to: Date,
+  ): Promise<{ discoverySearches: number; profileViews: number; slotViews: number }> {
+    const result = await this.pool.query<{ type: string; n: string }>(
+      `SELECT type, count(*)::text AS n
+       FROM catalog.outbox
+       WHERE created_at >= $1 AND created_at < $2
+         AND type IN ('DiscoverySearched', 'ProfileViewed', 'SlotsViewed')
+       GROUP BY type`,
+      [from, to],
+    );
+    const byType = new Map(result.rows.map((row) => [row.type, Number(row.n)]));
+    return {
+      discoverySearches: byType.get('DiscoverySearched') ?? 0,
+      profileViews: byType.get('ProfileViewed') ?? 0,
+      slotViews: byType.get('SlotsViewed') ?? 0,
+    };
+  }
 }
 
 function missingItems(docs: DocumentMeta[]): string[] {

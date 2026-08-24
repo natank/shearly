@@ -748,4 +748,88 @@ describe('admin routes (M5-P6, OPS-002)', () => {
     const afterRelistBody = (await afterRelist.json()) as { providers: { id: string }[] };
     expect(afterRelistBody.providers.map((p) => p.id)).toContain(providerId);
   });
+
+  it('funnel counts match a scripted sequence of discovery→booking events exactly (OPS-006)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const currentApp = app;
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    type FunnelBody = {
+      discoverySearches: number;
+      profileViews: number;
+      slotViews: number;
+      bookingsCreated: number;
+      bookingsConfirmed: number;
+      bookingsCompleted: number;
+    };
+    async function readFunnel(): Promise<FunnelBody> {
+      const from = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const to = new Date(Date.now() + 60 * 1000).toISOString();
+      const res = await currentApp.request(
+        `/admin/funnel?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { headers: { cookie: admin } },
+      );
+      expect(res.status).toBe(200);
+      return (await res.json()) as FunnelBody;
+    }
+
+    const before = await readFunnel();
+
+    // Script the exact funnel sequence: discovery -> profile view -> slot
+    // view -> booking created -> confirmed -> completed. Delta against the
+    // "before" snapshot rather than an absolute count, so concurrent tests
+    // in this same describe block (which also hit discovery/catalog/
+    // booking routes) can't make this test's counts wrong — the plan's own
+    // "matches a scripted sequence exactly" criterion is about this one
+    // sequence producing exactly a +1 at each stage, not about the funnel
+    // being empty beforehand.
+    await app.request('/discovery?lat=32.08&lng=34.78', { headers: { cookie: customerSession } });
+    await app.request(`/catalog/public/${providerId}`, { headers: { cookie: customerSession } });
+    await app.request(`/catalog/public/${providerId}/services/${serviceId}/slots`, {
+      headers: { cookie: customerSession },
+    });
+    const created = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin funnel street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(18),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const booking = (await created.json()) as { id: string };
+    await app.request(`/bookings/${booking.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    await services.pool.query(
+      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
+      [booking.id],
+    );
+    await app.request(`/bookings/${booking.id}/complete`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+
+    const after = await readFunnel();
+    expect(after.discoverySearches - before.discoverySearches).toBe(1);
+    expect(after.profileViews - before.profileViews).toBe(1);
+    expect(after.slotViews - before.slotViews).toBe(1);
+    expect(after.bookingsCreated - before.bookingsCreated).toBe(1);
+    expect(after.bookingsConfirmed - before.bookingsConfirmed).toBe(1);
+    expect(after.bookingsCompleted - before.bookingsCompleted).toBe(1);
+  });
 });

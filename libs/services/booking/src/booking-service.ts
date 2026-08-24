@@ -394,6 +394,49 @@ export class BookingService {
 
     return stats;
   }
+
+  /**
+   * OPS-006 (M5-P8b): the booking-created→confirmed→completed half of the
+   * funnel, plus payment failures/expiries/declines visible separately (the
+   * plan's own acceptance criterion). "Created"/"confirmed"/"completed"
+   * each count bookings that *ever* reached that state — read from
+   * booking.state_transitions (to_state), not booking.bookings.state,
+   * since a booking that was confirmed and later cancelled still counts
+   * toward "reached confirmed" for drop-off attribution; only "created"
+   * itself has no transition row (every booking starts in PENDING at
+   * insert time) and is counted straight from booking.bookings.
+   */
+  async funnelStats(
+    from: Date,
+    to: Date,
+  ): Promise<{
+    created: number;
+    confirmed: number;
+    completed: number;
+    declined: number;
+    expired: number;
+  }> {
+    const created = await this.pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM booking.bookings WHERE created_at >= $1 AND created_at < $2`,
+      [from, to],
+    );
+    const transitions = await this.pool.query<{ to_state: BookingState; n: string }>(
+      `SELECT to_state, count(DISTINCT booking_id)::text AS n
+       FROM booking.state_transitions
+       WHERE created_at >= $1 AND created_at < $2
+         AND to_state IN ('CONFIRMED', 'COMPLETED', 'DECLINED', 'EXPIRED')
+       GROUP BY to_state`,
+      [from, to],
+    );
+    const byState = new Map(transitions.rows.map((row) => [row.to_state, Number(row.n)]));
+    return {
+      created: Number(created.rows[0]?.n ?? 0),
+      confirmed: byState.get('CONFIRMED') ?? 0,
+      completed: byState.get('COMPLETED') ?? 0,
+      declined: byState.get('DECLINED') ?? 0,
+      expired: byState.get('EXPIRED') ?? 0,
+    };
+  }
 }
 
 function isExclusionViolation(error: unknown): boolean {
