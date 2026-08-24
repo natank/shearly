@@ -226,6 +226,22 @@ export class NotificationService {
     );
   }
 
+  /** NOT-002: both parties are reminded ahead of a CONFIRMED booking. */
+  async handleReminder(bookingId: string): Promise<void> {
+    const context = await loadBookingContext(this.pool, bookingId);
+    if (!context) {
+      return;
+    }
+    await this.sendTo(
+      context.customerEmail,
+      templates.reminderCustomer(context.customerLocale, context.summary),
+    );
+    await this.sendTo(
+      context.providerEmail,
+      templates.reminderProvider(context.providerLocale, context.summary),
+    );
+  }
+
   private async refundedAmount(bookingId: string): Promise<number> {
     const result = await this.pool.query<{ amount_minor: number }>(
       `SELECT amount_minor FROM payments.ledger WHERE booking_id = $1 AND kind = 'gross' ORDER BY created_at DESC LIMIT 1`,

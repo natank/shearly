@@ -38,6 +38,7 @@ export const envSchema = z.object({
   AUTO_COMPLETE_WINDOW_HOURS: z.coerce.number().positive().default(2),
   CANCEL_FULL_REFUND_HOURS: z.coerce.number().positive().default(12),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
+  REMINDER_WINDOW_HOURS: z.coerce.number().positive().default(24),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -80,6 +81,7 @@ export type AppConfig = {
   autoCompleteWindowHours: number;
   cancelFullRefundHours: number;
   pollIntervalMs: number;
+  reminderWindowHours: number;
 };
 
 export function toAppConfig(env: Env): AppConfig {
@@ -121,5 +123,6 @@ export function toAppConfig(env: Env): AppConfig {
     autoCompleteWindowHours: env.AUTO_COMPLETE_WINDOW_HOURS,
     cancelFullRefundHours: env.CANCEL_FULL_REFUND_HOURS,
     pollIntervalMs: env.POLL_INTERVAL_MS,
+    reminderWindowHours: env.REMINDER_WINDOW_HOURS,
   };
 }

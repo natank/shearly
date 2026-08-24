@@ -91,6 +91,18 @@ export function createBookingProviderRoutes(
             booking.slot_end.getTime() + input.config.autoCompleteWindowHours * 60 * 60 * 1000,
           )
         : undefined;
+    // NOT-002: "where scheduling permits" — a booking confirmed less than
+    // reminderWindowHours before its own slot has no meaningful reminder
+    // moment left, so no row is scheduled rather than one that's already due.
+    let remindAt: Date | undefined;
+    if (event === 'ProviderAccepts') {
+      const candidate = new Date(
+        booking.slot_start.getTime() - input.config.reminderWindowHours * 60 * 60 * 1000,
+      );
+      if (candidate.getTime() > Date.now()) {
+        remindAt = candidate;
+      }
+    }
     const updated = await input.booking.applyTransition(
       booking.id,
       result.nextState,
@@ -98,6 +110,7 @@ export function createBookingProviderRoutes(
       'provider',
       reason,
       autoCompleteAt,
+      remindAt,
     );
     await executeEffects(
       input,

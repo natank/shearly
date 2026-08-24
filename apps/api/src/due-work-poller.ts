@@ -1,5 +1,6 @@
 import type { QueryResultRow } from 'pg';
 import { claimDueWork, type Queryable } from '@shearly/shared-poller';
+import { insertOutboxEvent } from '@shearly/shared-events';
 import {
   transition,
   type BookingEvent,
@@ -12,6 +13,7 @@ type DueBookingRow = QueryResultRow & {
   id: string;
   state: 'PENDING' | 'CONFIRMED';
   provider_id: string;
+  customer_id: string;
   price_minor: number;
   currency: string;
   slot_start: Date;
@@ -19,6 +21,11 @@ type DueBookingRow = QueryResultRow & {
 };
 
 type DueAuthorizationRow = QueryResultRow & {
+  booking_id: string;
+};
+
+type DueReminderRow = QueryResultRow & {
+  id: string;
   booking_id: string;
 };
 
@@ -74,6 +81,35 @@ async function claimAndTransitionBookings(
          VALUES ($1, $2, $3, $4, 'system')`,
         [row.id, row.state, transitionResult.nextState, event],
       );
+      // Same outbox write BookingService.applyTransition() makes for every
+      // HTTP-driven transition (M5-P1) — the poller drives transitions too
+      // and must not skip it, or M5-P4's notification dispatcher never
+      // fires for expiry/auto-complete.
+      await insertOutboxEvent(client, 'booking', 'BookingStateChanged', {
+        bookingId: row.id,
+        fromState: row.state,
+        toState: transitionResult.nextState,
+        event,
+        actor: 'system',
+      });
+      if (transitionResult.nextState === 'COMPLETED') {
+        await insertOutboxEvent(client, 'booking', 'BookingCompleted', {
+          bookingId: row.id,
+          providerId: row.provider_id,
+          customerId: row.customer_id,
+          grossMinor: row.price_minor,
+          currency: row.currency,
+        });
+      }
+      // NOT-002: leaving CONFIRMED for any other state invalidates any
+      // still-pending reminder row, same rule BookingService.applyTransition()
+      // enforces for HTTP-driven transitions.
+      if (row.state === 'CONFIRMED' && transitionResult.nextState !== 'CONFIRMED') {
+        await client.query(
+          `DELETE FROM booking.reminders WHERE booking_id = $1 AND sent_at IS NULL`,
+          [row.id],
+        );
+      }
       toRunEffectsFor.push({ row, effects: transitionResult.effects });
     },
   );
@@ -111,6 +147,58 @@ async function claimAndTransitionBookings(
 }
 
 /**
+ * NOT-002: claims `booking.reminders` rows past `remind_at` and unsent
+ * (`sent_at IS NULL` — the same guard the M4-P1 index already carries).
+ * `NotificationService.handleReminder()` runs only after the claim
+ * transaction commits — same reasoning as `claimAndTransitionBookings`'s
+ * own doc comment, it uses a different pool connection. `sent_at` is only
+ * written once the send actually succeeds: marking it inside the claim
+ * transaction (before the send even runs) would record a reminder as sent
+ * when it wasn't, and the row would never be retried after a failure —
+ * the opposite of what "unsent" should mean. A failed send simply leaves
+ * `sent_at` null, so the next tick's claim query picks it up again.
+ */
+async function sendDueReminders(
+  services: AppServices,
+  now: Date,
+): Promise<{ succeeded: number; failed: number }> {
+  const toSendFor: DueReminderRow[] = [];
+
+  await claimDueWork<DueReminderRow>(
+    services.pool,
+    {
+      claimSql: `SELECT id, booking_id FROM booking.reminders
+                 WHERE sent_at IS NULL AND remind_at <= $1
+                 ORDER BY remind_at
+                 LIMIT 1
+                 FOR UPDATE SKIP LOCKED`,
+      claimParams: [now],
+      markDone: async () => undefined,
+      markFailed: async () => undefined,
+    },
+    async (_client, row) => {
+      toSendFor.push(row);
+    },
+  );
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const row of toSendFor) {
+    try {
+      await services.notifications.handleReminder(row.booking_id);
+      await services.pool.query(`UPDATE booking.reminders SET sent_at = now() WHERE id = $1`, [
+        row.id,
+      ]);
+      succeeded += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+/**
  * design §6.6: claims `PENDING` bookings past `response_deadline` and
  * `CONFIRMED` bookings past `auto_complete_at`, running each through the
  * same `transition()` the live HTTP routes use — the state machine has no
@@ -128,13 +216,14 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
   autoCompletedBookings: number;
   failedBookings: number;
   claimedAuthorizations: number;
+  remindersSent: number;
 }> {
   const now = new Date();
 
   const expiry = await claimAndTransitionBookings(
     services,
     'ResponseDeadlinePassed',
-    `SELECT id, state, provider_id, price_minor, currency, slot_start, response_deadline
+    `SELECT id, state, provider_id, customer_id, price_minor, currency, slot_start, response_deadline
      FROM booking.bookings
      WHERE state = 'PENDING' AND response_deadline IS NOT NULL AND response_deadline <= $1
      ORDER BY response_deadline
@@ -146,7 +235,7 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
   const autoComplete = await claimAndTransitionBookings(
     services,
     'AutoCompleteElapsed',
-    `SELECT id, state, provider_id, price_minor, currency, slot_start, response_deadline
+    `SELECT id, state, provider_id, customer_id, price_minor, currency, slot_start, response_deadline
      FROM booking.bookings
      WHERE state = 'CONFIRMED' AND auto_complete_at IS NOT NULL AND auto_complete_at <= $1
      ORDER BY auto_complete_at
@@ -178,11 +267,14 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
     },
   );
 
+  const remindersSent = await sendDueReminders(services, now);
+
   return {
     expiredBookings: expiry.succeeded,
     autoCompletedBookings: autoComplete.succeeded,
-    failedBookings: expiry.failed + autoComplete.failed,
+    failedBookings: expiry.failed + autoComplete.failed + remindersSent.failed,
     claimedAuthorizations: deferredAuth.claimed,
+    remindersSent: remindersSent.succeeded,
   };
 }
 
