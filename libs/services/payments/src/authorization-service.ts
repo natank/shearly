@@ -317,67 +317,13 @@ export class AuthorizationService {
     reason: string,
     currency: string,
   ): Promise<void> {
-    const key = `refund:${bookingId}:${reason}`;
-    const op = await this.beginOperation(key, 'refund', bookingId);
-    if (!op.isNew && op.existing?.state === 'succeeded') {
-      return;
-    }
-
-    const auth = await this.pool.query<{ stripe_payment_intent_id: string | null }>(
-      'SELECT stripe_payment_intent_id FROM payments.authorizations WHERE booking_id = $1',
-      [bookingId],
+    await this.refundWithKey(
+      `refund:${bookingId}:${reason}`,
+      bookingId,
+      amountMinor,
+      currency,
+      reason,
     );
-    const paymentIntentId = auth.rows[0]?.stripe_payment_intent_id;
-    if (!paymentIntentId) {
-      await this.completeOperation(key, 'failed', {
-        message: 'no authorization on file',
-        amountMinor,
-        currency,
-        reason,
-      });
-      throw new PaymentError('errors.payments.noAuthorization');
-    }
-
-    try {
-      if (this.stripe) {
-        await this.stripe.refunds.create(
-          { payment_intent: paymentIntentId, amount: amountMinor },
-          { idempotencyKey: key },
-        );
-      }
-      await this.completeOperation(key, 'succeeded', { amountMinor, currency, reason });
-      const client = await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          `UPDATE payments.authorizations SET status = 'REFUNDED', updated_at = now() WHERE booking_id = $1`,
-          [bookingId],
-        );
-        await insertOutboxEvent(client, 'payments', 'PaymentRefunded', {
-          bookingId,
-          amountMinor,
-          currency,
-          reason,
-        });
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
-    } catch (error) {
-      // OPS-002: same reasoning as capture()'s failure branch above — the
-      // exceptions view and retry endpoint need the attempted
-      // amount/currency/reason, not just the error message.
-      await this.completeOperation(key, 'failed', {
-        message: (error as Error).message,
-        amountMinor,
-        currency,
-        reason,
-      });
-      throw new PaymentError('errors.payments.refundFailed');
-    }
   }
 
   /** OPS-002: every operation recorded for one booking, oldest first — the booking detail view's payment-side data. */
@@ -453,6 +399,182 @@ export class AuthorizationService {
       result: row.result ?? {},
       updatedAt: row.updated_at,
     }));
+  }
+
+  private async recordManualAction(
+    bookingId: string,
+    kind: 'refund' | 'no_show_reversal',
+    amountMinor: number,
+    currency: string,
+    reason: string,
+    actorAccountId: string,
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO payments.manual_actions (booking_id, kind, amount_minor, currency, reason, actor_account_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [bookingId, kind, amountMinor, currency, reason, actorAccountId],
+    );
+  }
+
+  /**
+   * OPS-003: a full/partial refund outside the automatic cancel-window
+   * rules, admin-triggered with a mandatory reason. Reuses refund()'s
+   * Stripe call and idempotency machinery (design §8.2) under a distinctly
+   * namespaced key (`manual-refund:` rather than `refund:`) so a manual
+   * refund can never collide with — or be confused for — a state-machine-
+   * driven one keyed on the same booking. Recorded to the append-only
+   * `payments.manual_actions` audit trail once the refund itself succeeds.
+   */
+  async manualRefund(
+    bookingId: string,
+    amountMinor: number,
+    currency: string,
+    reason: string,
+    actorAccountId: string,
+  ): Promise<void> {
+    if (!reason.trim()) {
+      throw new ConflictError('errors.payments.reasonRequired');
+    }
+    await this.refundWithKey(
+      `manual-refund:${bookingId}:${reason}`,
+      bookingId,
+      amountMinor,
+      currency,
+      reason,
+    );
+    await this.recordManualAction(
+      bookingId,
+      'refund',
+      amountMinor,
+      currency,
+      reason,
+      actorAccountId,
+    );
+  }
+
+  /**
+   * OPS-003: reverses a disputed no-show outcome. Only NO_SHOW_CUSTOMER is
+   * reversible — that path always captures 100% from the customer (see the
+   * state machine's ProviderReportsCustomerNoShow transition), so "the
+   * opposite direction" is a well-defined Stripe refund. NO_SHOW_PROVIDER
+   * only moves money when the booking had already been captured before the
+   * no-show was reported (the alreadyCaptured branch), and even then
+   * reversing it would mean re-capturing funds already returned to the
+   * customer's card — not a real Stripe primitive on a refunded
+   * PaymentIntent, and not safely automatable without a fresh payment
+   * method. Both cases are rejected here rather than silently no-op'd.
+   */
+  async reverseNoShow(bookingId: string, reason: string, actorAccountId: string): Promise<void> {
+    if (!reason.trim()) {
+      throw new ConflictError('errors.payments.reasonRequired');
+    }
+    const auth = await this.pool.query<{
+      status: string;
+      stripe_payment_intent_id: string | null;
+    }>(
+      'SELECT status, stripe_payment_intent_id FROM payments.authorizations WHERE booking_id = $1',
+      [bookingId],
+    );
+    const row = auth.rows[0];
+    if (!row || row.status !== 'CAPTURED' || !row.stripe_payment_intent_id) {
+      throw new ConflictError('errors.payments.noShowNotReversible');
+    }
+    const capture = await this.pool.query<{ result: { amountMinor?: number; currency?: string } }>(
+      `SELECT result FROM payments.operations WHERE key = $1 AND kind = 'capture' AND state = 'succeeded'`,
+      [`capture:${bookingId}`],
+    );
+    const amountMinor = capture.rows[0]?.result?.amountMinor;
+    const currency = capture.rows[0]?.result?.currency;
+    if (amountMinor === undefined || !currency) {
+      throw new ConflictError('errors.payments.noShowNotReversible');
+    }
+    await this.refundWithKey(
+      `no-show-reversal:${bookingId}`,
+      bookingId,
+      amountMinor,
+      currency,
+      reason,
+    );
+    await this.recordManualAction(
+      bookingId,
+      'no_show_reversal',
+      amountMinor,
+      currency,
+      reason,
+      actorAccountId,
+    );
+  }
+
+  /**
+   * Shared by refund() (state-machine-driven) and manualRefund()/
+   * reverseNoShow() (OPS-003, admin-driven) — same Stripe call and
+   * payments.operations bookkeeping, different idempotency-key namespace so
+   * the three call sites can never collide on the same key.
+   */
+  private async refundWithKey(
+    key: string,
+    bookingId: string,
+    amountMinor: number,
+    currency: string,
+    reason: string,
+  ): Promise<void> {
+    const op = await this.beginOperation(key, 'refund', bookingId);
+    if (!op.isNew && op.existing?.state === 'succeeded') {
+      return;
+    }
+
+    const auth = await this.pool.query<{ stripe_payment_intent_id: string | null }>(
+      'SELECT stripe_payment_intent_id FROM payments.authorizations WHERE booking_id = $1',
+      [bookingId],
+    );
+    const paymentIntentId = auth.rows[0]?.stripe_payment_intent_id;
+    if (!paymentIntentId) {
+      await this.completeOperation(key, 'failed', {
+        message: 'no authorization on file',
+        amountMinor,
+        currency,
+        reason,
+      });
+      throw new PaymentError('errors.payments.noAuthorization');
+    }
+
+    try {
+      if (this.stripe) {
+        await this.stripe.refunds.create(
+          { payment_intent: paymentIntentId, amount: amountMinor },
+          { idempotencyKey: key },
+        );
+      }
+      await this.completeOperation(key, 'succeeded', { amountMinor, currency, reason });
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE payments.authorizations SET status = 'REFUNDED', updated_at = now() WHERE booking_id = $1`,
+          [bookingId],
+        );
+        await insertOutboxEvent(client, 'payments', 'PaymentRefunded', {
+          bookingId,
+          amountMinor,
+          currency,
+          reason,
+        });
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      await this.completeOperation(key, 'failed', {
+        message: (error as Error).message,
+        amountMinor,
+        currency,
+        reason,
+      });
+      throw new PaymentError('errors.payments.refundFailed');
+    }
   }
 
   /**

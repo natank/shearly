@@ -56,6 +56,7 @@ export function createApp(services: AppServices = compose()) {
   });
   const admin = createAdminRoutes({
     identity: services.identity,
+    catalog: services.catalog,
     booking: services.booking,
     authorizations: services.authorizations,
     ledger: services.ledger,

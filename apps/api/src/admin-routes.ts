@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import type { AppConfig } from '@shearly/shared-config';
 import type { IdentityService } from '@shearly/services-identity';
+import type { CatalogService } from '@shearly/services-provider-catalog';
 import type { BookingService, BookingRow } from '@shearly/services-booking';
 import type { AuthorizationService, LedgerService } from '@shearly/services-payments';
 import type { BookingState } from '@shearly/domain-booking-state-machine';
+import { NotFoundError, ValidationError } from '@shearly/shared-errors';
 import { requireAdmin } from './session.js';
 
 const VALID_STATES: readonly BookingState[] = [
@@ -47,6 +49,7 @@ function toBookingSummary(row: BookingRow) {
  */
 export function createAdminRoutes(input: {
   identity: IdentityService;
+  catalog: CatalogService;
   booking: BookingService;
   authorizations: AuthorizationService;
   ledger: LedgerService;
@@ -97,6 +100,64 @@ export function createAdminRoutes(input: {
     const key = c.req.param('key');
     await input.authorizations.retryFailedOperation(key);
     return c.json({ ok: true });
+  });
+
+  // OPS-003: manual refund outside the automatic cancel-window rules,
+  // admin-triggered with a mandatory reason.
+  routes.post('/admin/bookings/:id/refund', async (c) => {
+    const admin = await requireAdmin(c, input.identity, input.config);
+    const booking = await input.booking.requireById(c.req.param('id'));
+    const body = (await c.req.json().catch(() => ({}))) as {
+      amountMinor?: number;
+      reason?: string;
+    };
+    if (typeof body.amountMinor !== 'number' || body.amountMinor <= 0 || !body.reason?.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    await input.authorizations.manualRefund(
+      booking.id,
+      body.amountMinor,
+      booking.currency,
+      body.reason,
+      admin.id,
+    );
+    return c.json({ ok: true });
+  });
+
+  // OPS-003: reverses a disputed NO_SHOW_CUSTOMER outcome (refunds the
+  // captured amount back to the customer). See reverseNoShow()'s own doc
+  // comment for why NO_SHOW_PROVIDER is not reversible.
+  routes.post('/admin/bookings/:id/reverse-no-show', async (c) => {
+    const admin = await requireAdmin(c, input.identity, input.config);
+    const booking = await input.booking.requireById(c.req.param('id'));
+    const body = (await c.req.json().catch(() => ({}))) as { reason?: string };
+    if (!body.reason?.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    await input.authorizations.reverseNoShow(booking.id, body.reason, admin.id);
+    return c.json({ ok: true });
+  });
+
+  // OPS-005: manual payout trigger for a provider's current pending
+  // balance. Idempotent against a repeat trigger via the client-supplied
+  // Idempotency-Key header (same pattern as booking creation).
+  routes.post('/admin/providers/:providerId/payout', async (c) => {
+    await requireAdmin(c, input.identity, input.config);
+    const idempotencyKey = c.req.header('Idempotency-Key');
+    if (!idempotencyKey) {
+      throw new ValidationError('errors.validation');
+    }
+    const provider = await input.catalog.getById(c.req.param('providerId'));
+    if (!provider) {
+      throw new NotFoundError('catalog.providerNotFound');
+    }
+    const bookings = await input.booking.listByProvider(provider.id);
+    const payout = await input.ledger.triggerPayout(
+      idempotencyKey,
+      provider.account_id,
+      bookings.map((booking) => booking.id),
+    );
+    return c.json({ payout });
   });
 
   return routes;
