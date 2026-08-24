@@ -2,6 +2,7 @@ export { defaultLocale, getTextDirection, isLocale, locales } from './locales';
 export type { Locale } from './locales';
 export {
   loadAccountMessages,
+  loadAdminMessages,
   loadBookingMessages,
   loadCommonMessages,
   loadDiscoveryMessages,

@@ -1,0 +1,22 @@
+{
+  "bookings": "הזמנות",
+  "exceptions": "חריגים",
+  "customerEmail": "אימייל לקוח",
+  "providerId": "מזהה נותן שירות",
+  "state": "מצב",
+  "anyState": "כל מצב",
+  "from": "מתאריך",
+  "to": "עד תאריך",
+  "search": "חיפוש",
+  "noResults": "לא נמצאו הזמנות.",
+  "addressLine": "כתובת",
+  "total": "סה\"כ",
+  "stateHistory": "היסטוריית מצב",
+  "noHistory": "אין היסטוריית מצב.",
+  "ledger": "יומן כספי",
+  "noLedger": "אין רשומות יומן.",
+  "operations": "פעולות תשלום",
+  "noOperations": "אין פעולות תשלום.",
+  "noExceptions": "אין פעולות שנכשלו.",
+  "retry": "נסה שוב"
+}

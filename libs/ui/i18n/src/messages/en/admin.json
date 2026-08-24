@@ -1,0 +1,22 @@
+{
+  "bookings": "Bookings",
+  "exceptions": "Exceptions",
+  "customerEmail": "Customer email",
+  "providerId": "Provider ID",
+  "state": "State",
+  "anyState": "Any state",
+  "from": "From",
+  "to": "To",
+  "search": "Search",
+  "noResults": "No bookings found.",
+  "addressLine": "Address",
+  "total": "Total",
+  "stateHistory": "State history",
+  "noHistory": "No state history.",
+  "ledger": "Ledger",
+  "noLedger": "No ledger entries.",
+  "operations": "Payment operations",
+  "noOperations": "No payment operations.",
+  "noExceptions": "No failed operations.",
+  "retry": "Retry"
+}

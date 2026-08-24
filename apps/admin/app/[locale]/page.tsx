@@ -9,6 +9,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   setRequestLocale(locale);
   const t = await getTranslations('common');
   const vettingT = await getTranslations('vetting');
+  const adminT = await getTranslations('admin');
   const account = await getSession();
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-3 p-4">
@@ -18,6 +19,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         <>
           <p>{account.email}</p>
           <Link href="/vetting">{vettingT('queue')}</Link>
+          <Link href="/bookings">{adminT('bookings')}</Link>
+          <Link href="/exceptions">{adminT('exceptions')}</Link>
           <SignOutButton />
         </>
       ) : (

@@ -55,6 +55,7 @@
       "@shearly/feature-discovery": ["libs/ui/feature-discovery/src/index.ts"],
       "@shearly/feature-booking": ["libs/ui/feature-booking/src/index.ts"],
       "@shearly/feature-provider": ["libs/ui/feature-provider/src/index.ts"],
+      "@shearly/feature-admin": ["libs/ui/feature-admin/src/index.ts"],
       "@shearly/feature-account": ["libs/ui/feature-account/src/index.ts"]
     }
   },

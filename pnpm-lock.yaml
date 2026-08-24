@@ -207,6 +207,8 @@ importers:
 
   libs/shared/observability: {}
 
+  libs/shared/poller: {}
+
   libs/shared/testing: {}
 
   libs/ui/design-system: {}
@@ -216,6 +218,12 @@ importers:
       '@shearly/contracts-identity':
         specifier: workspace:*
         version: link:../../contracts/identity
+      '@shearly/ui-design-system':
+        specifier: workspace:*
+        version: link:../design-system
+
+  libs/ui/feature-admin:
+    dependencies:
       '@shearly/ui-design-system':
         specifier: workspace:*
         version: link:../design-system
