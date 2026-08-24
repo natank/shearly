@@ -145,4 +145,51 @@ describe('LedgerService', () => {
       await pool.end();
     }
   });
+
+  it('triggerPayout (OPS-005) pays out the pending balance, is idempotent by key, and rejects a zero balance', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const ledger = new LedgerService(pool, 0.2);
+    const providerAccountId = crypto.randomUUID();
+    const bookingId = crypto.randomUUID();
+    try {
+      await ledger.split(bookingId, 20000); // net 16000
+
+      const key = crypto.randomUUID();
+      const payout = await ledger.triggerPayout(key, providerAccountId, [bookingId]);
+      expect(payout).toMatchObject({
+        providerAccountId,
+        amountMinor: 16000,
+        status: 'succeeded',
+        triggeredBy: 'admin',
+      });
+
+      const paidOut = await ledger.paidOutBalance(providerAccountId);
+      expect(paidOut).toBe(16000);
+
+      // Idempotent against a double-click: same key returns the same
+      // payout row rather than computing a fresh (now-zero) balance.
+      const repeat = await ledger.triggerPayout(key, providerAccountId, [bookingId]);
+      expect(repeat.id).toBe(payout.id);
+      expect(await ledger.paidOutBalance(providerAccountId)).toBe(16000);
+
+      // A distinct key against a now-zero pending balance is a genuine
+      // conflict, not a second payout.
+      await expect(
+        ledger.triggerPayout(crypto.randomUUID(), providerAccountId, [bookingId]),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    } finally {
+      await pool.query('DELETE FROM payments.payouts WHERE provider_account_id = $1', [
+        providerAccountId,
+      ]);
+      await pool.query('DELETE FROM payments.ledger WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
 });

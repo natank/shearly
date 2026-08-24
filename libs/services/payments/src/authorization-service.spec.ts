@@ -947,4 +947,149 @@ describe('AuthorizationService', () => {
       await pool.end();
     }
   });
+
+  it('manualRefund (OPS-003) rejects a missing reason, and with one refunds and records an audit row attributed to the acting admin', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const bookingId = crypto.randomUUID();
+    const bookingAttemptId = crypto.randomUUID();
+    const adminAccountId = crypto.randomUUID();
+    try {
+      await svc.authorizeOrSetup(
+        {
+          bookingId,
+          bookingAttemptId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await svc.capture(bookingId, 20000, 'ILS');
+
+      await expect(
+        svc.manualRefund(bookingId, 5000, 'ILS', '', adminAccountId),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(stripe.refunds.create).not.toHaveBeenCalled();
+
+      await svc.manualRefund(bookingId, 5000, 'ILS', 'goodwill adjustment', adminAccountId);
+      expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
+
+      const auth = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(auth.rows[0].status).toBe('REFUNDED');
+
+      const action = await pool.query<{
+        kind: string;
+        amount_minor: number;
+        reason: string;
+        actor_account_id: string;
+      }>(
+        'SELECT kind, amount_minor, reason, actor_account_id FROM payments.manual_actions WHERE booking_id = $1',
+        [bookingId],
+      );
+      expect(action.rows[0]).toMatchObject({
+        kind: 'refund',
+        amount_minor: 5000,
+        reason: 'goodwill adjustment',
+        actor_account_id: adminAccountId,
+      });
+
+      // Idempotent against retry: a second call with the same reason must
+      // not call Stripe again.
+      await svc.manualRefund(bookingId, 5000, 'ILS', 'goodwill adjustment', adminAccountId);
+      expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
+    } finally {
+      await pool.query('DELETE FROM payments.manual_actions WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = $1', [bookingId]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = $1', [bookingId]);
+      await pool.end();
+    }
+  });
+
+  it('reverseNoShow (OPS-003) refunds a captured no-show outcome and rejects one that was never captured', async () => {
+    if (!url) {
+      if (process.env.CI) {
+        throw new Error('DATABASE_URL must be set in CI');
+      }
+      return;
+    }
+    await migratePayments(url);
+    const pool = new pg.Pool({ connectionString: url });
+    const stripe = fakeStripe();
+    const svc = new AuthorizationService(pool, stripe, 6);
+    const capturedBookingId = crypto.randomUUID();
+    const setupOnlyBookingId = crypto.randomUUID();
+    const adminAccountId = crypto.randomUUID();
+    try {
+      // NO_SHOW_CUSTOMER path: always captures 100% — reversible.
+      await svc.authorizeOrSetup(
+        {
+          bookingId: capturedBookingId,
+          bookingAttemptId: capturedBookingId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+        'pm_test',
+      );
+      await svc.capture(capturedBookingId, 20000, 'ILS');
+
+      await expect(svc.reverseNoShow(capturedBookingId, '', adminAccountId)).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+
+      await svc.reverseNoShow(capturedBookingId, 'dispute upheld', adminAccountId);
+      expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
+
+      const auth = await pool.query<{ status: string }>(
+        'SELECT status FROM payments.authorizations WHERE booking_id = $1',
+        [capturedBookingId],
+      );
+      expect(auth.rows[0].status).toBe('REFUNDED');
+
+      const action = await pool.query<{ kind: string; amount_minor: number }>(
+        'SELECT kind, amount_minor FROM payments.manual_actions WHERE booking_id = $1',
+        [capturedBookingId],
+      );
+      expect(action.rows[0]).toMatchObject({ kind: 'no_show_reversal', amount_minor: 20000 });
+
+      // A SETUP_ONLY authorization (never captured — no money moved, so
+      // nothing to reverse) must be rejected, not silently no-op'd.
+      await svc.authorizeOrSetup(
+        {
+          bookingId: setupOnlyBookingId,
+          bookingAttemptId: setupOnlyBookingId,
+          amountMinor: 20000,
+          currency: 'ILS',
+          slotStart: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // beyond horizon
+        },
+        'pm_test',
+      );
+      await expect(
+        svc.reverseNoShow(setupOnlyBookingId, 'dispute upheld', adminAccountId),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    } finally {
+      await pool.query('DELETE FROM payments.manual_actions WHERE booking_id = ANY($1)', [
+        [capturedBookingId, setupOnlyBookingId],
+      ]);
+      await pool.query('DELETE FROM payments.authorizations WHERE booking_id = ANY($1)', [
+        [capturedBookingId, setupOnlyBookingId],
+      ]);
+      await pool.query('DELETE FROM payments.operations WHERE booking_id = ANY($1)', [
+        [capturedBookingId, setupOnlyBookingId],
+      ]);
+      await pool.end();
+    }
+  });
 });

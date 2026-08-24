@@ -399,4 +399,227 @@ describe('admin routes (M5-P6, OPS-002)', () => {
     expect(secondRetry.status).toBe(200);
     expect(stripe.paymentIntents.capture).toHaveBeenCalledTimes(2);
   });
+
+  it('a manual refund without a reason is rejected; with one it succeeds and shows up in the booking detail view (OPS-003)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+    const refundCallsBefore = vi.mocked(stripe.refunds.create).mock.calls.length;
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin manual refund street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(12),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    await app.request(`/bookings/${created.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    await services.authorizations.capture(created.id, 20000, 'ILS');
+
+    const missingReason = await app.request(`/admin/bookings/${created.id}/refund`, {
+      method: 'POST',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ amountMinor: 5000 }),
+    });
+    expect(missingReason.status).toBe(400);
+    expect(vi.mocked(stripe.refunds.create).mock.calls.length - refundCallsBefore).toBe(0);
+
+    const refunded = await app.request(`/admin/bookings/${created.id}/refund`, {
+      method: 'POST',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ amountMinor: 5000, reason: 'goodwill adjustment' }),
+    });
+    expect(refunded.status).toBe(200);
+    expect(vi.mocked(stripe.refunds.create).mock.calls.length - refundCallsBefore).toBe(1);
+
+    const detail = await app.request(`/admin/bookings/${created.id}`, {
+      headers: { cookie: admin },
+    });
+    const detailBody = (await detail.json()) as {
+      operations: { kind: string; state: string }[];
+    };
+    expect(
+      detailBody.operations.some((op) => op.kind === 'refund' && op.state === 'succeeded'),
+    ).toBe(true);
+
+    const action = await services.pool.query<{ kind: string; amount_minor: number }>(
+      `SELECT kind, amount_minor FROM payments.manual_actions WHERE booking_id = $1`,
+      [created.id],
+    );
+    expect(action.rows).toEqual([{ kind: 'refund', amount_minor: 5000 }]);
+  });
+
+  it('reversing a disputed NO_SHOW_CUSTOMER outcome refunds the captured amount and re-nets the financial result (OPS-003)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+    const captureCallsBefore = vi.mocked(stripe.paymentIntents.capture).mock.calls.length;
+    const refundCallsBefore = vi.mocked(stripe.refunds.create).mock.calls.length;
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin no-show reversal street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(13),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    await app.request(`/bookings/${created.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    await services.pool.query(
+      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
+      [created.id],
+    );
+    const noShow = await app.request(`/bookings/${created.id}/no-show`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    expect((await noShow.json()) as { state: string }).toMatchObject({
+      state: 'NO_SHOW_CUSTOMER',
+    });
+    expect(vi.mocked(stripe.paymentIntents.capture).mock.calls.length - captureCallsBefore).toBe(1);
+
+    const missingReason = await app.request(`/admin/bookings/${created.id}/reverse-no-show`, {
+      method: 'POST',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(missingReason.status).toBe(400);
+
+    const reversed = await app.request(`/admin/bookings/${created.id}/reverse-no-show`, {
+      method: 'POST',
+      headers: { cookie: admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'dispute upheld' }),
+    });
+    expect(reversed.status).toBe(200);
+    expect(vi.mocked(stripe.refunds.create).mock.calls.length - refundCallsBefore).toBe(1);
+
+    const auth = await services.pool.query<{ status: string }>(
+      `SELECT status FROM payments.authorizations WHERE booking_id = $1`,
+      [created.id],
+    );
+    expect(auth.rows[0].status).toBe('REFUNDED');
+
+    const action = await services.pool.query<{ kind: string; amount_minor: number }>(
+      `SELECT kind, amount_minor FROM payments.manual_actions WHERE booking_id = $1`,
+      [created.id],
+    );
+    expect(action.rows).toEqual([{ kind: 'no_show_reversal', amount_minor: 20000 }]);
+  });
+
+  it('a manual payout moves the pending balance to paid-out, is idempotent against a double-click, and reflects in the earnings view (OPS-005)', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const { session: customerSession } = await registerCustomer(app);
+    const admin = await adminSession(app, services);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'admin payout street',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(14),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const created = (await res.json()) as { id: string };
+
+    await app.request(`/bookings/${created.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    await services.pool.query(
+      `UPDATE booking.bookings SET slot_start = now() - interval '1 hour' WHERE id = $1`,
+      [created.id],
+    );
+    await app.request(`/bookings/${created.id}/complete`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+
+    const noKey = await app.request(`/admin/providers/${providerId}/payout`, {
+      method: 'POST',
+      headers: { cookie: admin },
+    });
+    expect(noKey.status).toBe(400);
+
+    const idempotencyKey = crypto.randomUUID();
+    const payout = await app.request(`/admin/providers/${providerId}/payout`, {
+      method: 'POST',
+      headers: { cookie: admin, 'Idempotency-Key': idempotencyKey },
+    });
+    expect(payout.status).toBe(200);
+    const payoutBody = (await payout.json()) as { payout: { amountMinor: number; id: string } };
+    expect(payoutBody.payout.amountMinor).toBe(16000); // 20000 - 20% commission
+
+    const earnings = await app.request('/provider/me/earnings', {
+      headers: { cookie: providerSession },
+    });
+    const earningsBody = (await earnings.json()) as { paidOutMinor: number; pendingMinor: number };
+    expect(earningsBody.paidOutMinor).toBe(16000);
+    expect(earningsBody.pendingMinor).toBe(0);
+
+    // Idempotent against a double-click: same key returns the same payout,
+    // not a second one.
+    const repeat = await app.request(`/admin/providers/${providerId}/payout`, {
+      method: 'POST',
+      headers: { cookie: admin, 'Idempotency-Key': idempotencyKey },
+    });
+    const repeatBody = (await repeat.json()) as { payout: { id: string } };
+    expect(repeatBody.payout.id).toBe(payoutBody.payout.id);
+
+    const earningsAfterRepeat = await app.request('/provider/me/earnings', {
+      headers: { cookie: providerSession },
+    });
+    expect(((await earningsAfterRepeat.json()) as { paidOutMinor: number }).paidOutMinor).toBe(
+      16000,
+    );
+  });
 });
