@@ -9,7 +9,7 @@ export default async function ProviderPublicPage({
   const { locale, id } = await params;
   setRequestLocale(locale);
   return (
-    <main className="p-4">
+    <main id="main-content" className="p-4">
       <DiscoveryProfile providerId={id} />
     </main>
   );

@@ -81,7 +81,7 @@ export function RegisterForm() {
           <input type="radio" name="role" value="provider" /> {t('roleProvider')}
         </label>
       </fieldset>
-      {errorKey ? <p>{t('registerAccepted')}</p> : null}
+      {errorKey ? <p role="alert">{t('registerAccepted')}</p> : null}
       <Button type="submit" disabled={pending}>
         {t('submitRegister')}
       </Button>
@@ -140,7 +140,7 @@ export function SignInForm({ adminOnly = false }: { adminOnly?: boolean }) {
         {t('password')}
         <Input name="password" type="password" required autoComplete="current-password" />
       </label>
-      {errorKey ? <p>{t(errorKey as 'invalidCredentials')}</p> : null}
+      {errorKey ? <p role="alert">{t(errorKey as 'invalidCredentials')}</p> : null}
       <Button type="submit" disabled={pending}>
         {t('submitSignIn')}
       </Button>

@@ -12,7 +12,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const accountT = await getTranslations('account');
   const account = await getSession();
   return (
-    <main className="flex flex-col gap-4 p-4">
+    <main id="main-content" className="flex flex-col gap-4 p-4">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
         <h1 className="text-xl font-medium">{t('appName')}</h1>
         <LocaleSwitcher />

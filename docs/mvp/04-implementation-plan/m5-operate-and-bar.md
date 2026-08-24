@@ -92,7 +92,16 @@ M5-P8 OPS-004 standing view + suspend/delist
 M5-P8b OPS-006 funnel view (split out at P8 write time — see that section)
     │
     ▼
-M5-P9 A11Y/UX pass + both-locale E2E extension (decline/expiry/cancel) + named alarms (OBS-004)
+M5-P9a A11Y-004: axe-core CI gate + keyboard-only E2E walkthrough (split out at P9 write time — see that section)
+    │
+    ▼
+M5-P9b UX-002/003/004/005: loading/error/empty-state inventory + responsive/placeholder-text sweep
+    │
+    ▼
+M5-P9c both-locale E2E extension (decline/expiry/cancel)
+    │
+    ▼
+M5-P9d OBS-004: named alarms
     │
     ▼
 M5-P10 stretch: PAY-006 automated payouts, RAT-003 review replies (only if slack)
@@ -114,7 +123,10 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 | M5-P7 | | | |
 | M5-P8 | | | |
 | M5-P8b | | | |
-| M5-P9 | | | |
+| M5-P9a | | | |
+| M5-P9b | | | |
+| M5-P9c | | | |
+| M5-P9d | | | |
 | M5-P10 | | | |
 
 ### M5-P1 — Outbox schema + event bus
@@ -236,19 +248,47 @@ Nothing is parallel. M0–M4 smokes must stay green throughout.
 
 **Out.** Nothing further — this closes out OPS-006.
 
-### M5-P9 — A11Y/UX pass + both-locale E2E extension + alarms
+### M5-P9a — A11Y-004: axe-core CI gate + keyboard-only E2E walkthrough
+
+**Split from the plan's original single P9, decided at write time:** M5-P9 bundled five materially different concerns — an automated a11y CI gate, a UX-state inventory sweep, an E2E test extension, and an unrelated observability feature (named alarms) — into one PR. Each is independently shippable and independently reviewable; bundling them would make the diff span CI config, two frontend apps, Playwright specs, and backend logging all at once. Same reasoning as the M5-P6/P6b and M5-P8/P8b splits. Order: a11y first (P9a) since UX-002/003/004/005's state-inventory pass (P9b) benefits from a11y's semantic-markup pass already having landed; alarms last (P9d) since it's fully independent of the other three and lowest-risk to defer.
 
 **Does**
 - WCAG 2.1 AA pass on the core booking flow (discovery, profile, slot selection, checkout, confirmation) — semantic markup, full keyboard operability, visible focus, accessible names.
-- Automated a11y checks added to CI (axe-core or equivalent) against the core flow (NFR-A11Y-004).
+- Automated a11y checks added to CI (axe-core, via `@axe-core/playwright`) against the core flow (NFR-A11Y-004) — fails the build on a violation, not a one-time manual pass.
+- Keyboard-only Playwright walkthrough completing a booking with no mouse/pointer events.
+
+**Tests.** Automated a11y check passes in CI on the core flow and fails the build if a violation is introduced. Keyboard-only Playwright walkthrough completes a booking with no mouse events.
+
+**Out.** A11Y-004's "P2" ceiling means this doesn't need to be exhaustive WCAG coverage of every admin screen — core booking flow is the bar, per the requirement's own scope. UX-state inventory (M5-P9b, distinct requirement family).
+
+### M5-P9b — UX-002/003/004/005: loading/error/empty-state inventory + responsive/placeholder sweep
+
+**Does**
 - Loading/error/empty-state inventory across `apps/web` and `apps/admin` — every screen gets a real state for each, no dead ends, no blank regions (NFR-UX-002/003).
-- Responsive check at 360px+ (NFR-UX-004); a sweep for placeholder/lorem/untranslated text in any reachable state (NFR-UX-005) — likely a scripted grep akin to the existing `check-hardcoded-strings.mjs`/`check-physical-styles.mjs`, extended or reused.
+- Responsive check at 360px+ (NFR-UX-004).
+- A sweep for placeholder/lorem/untranslated text in any reachable state (NFR-UX-005) — a scripted grep akin to the existing `check-hardcoded-strings.mjs`/`check-physical-styles.mjs`, extended or reused.
+
+**Tests.** Every screen inventoried has an automated test asserting its loading/error/empty state renders something real, not blank.
+
+**Out.** Nothing further — this closes out UX-002/003/004/005 at their stated MVP scope.
+
+### M5-P9c — both-locale E2E extension (decline/expiry/cancel)
+
+**Does**
 - Both-locale E2E extended beyond M4-P9's happy path to cover decline/expiry/cancel in both locales (master's explicit M5 note: "full path already started in M4; M5 adds decline/expiry/cancel in both locales").
-- Named alarms wired (design §10.3, NFR-OBS-004): payment capture failure, refund failure, booking expiry spike, orphan-authorization reconciler action, SES bounce rate. Extraction-time equivalent is real CloudWatch/SNS or similar; MVP-local equivalent TBD at write time (likely log-based, consistent with "no paid dependency" pattern M2/M3 used for the geocoder).
 
-**Tests.** Automated a11y check passes in CI on the core flow and fails the build if a violation is introduced (regression-proof, not just a one-time manual pass). Keyboard-only Playwright walkthrough completes a booking with no mouse events. Every screen inventoried has an automated test asserting its loading/error/empty state renders something real, not blank. Decline/expiry/cancel E2E passes in both `/en` and `/he`.
+**Tests.** Decline/expiry/cancel E2E passes in both `/en` and `/he`.
 
-**Out.** A11Y-004's "P2" ceiling means this doesn't need to be exhaustive WCAG coverage of every admin screen — core booking flow is the bar, per the requirement's own scope.
+**Out.** Nothing further.
+
+### M5-P9d — OBS-004: named alarms
+
+**Does**
+- Named alarms wired (design §10.3, NFR-OBS-004): payment capture failure, refund failure, booking expiry spike, orphan-authorization reconciler action, SES bounce rate. Extraction-time equivalent is real CloudWatch/SNS or similar; MVP-local equivalent is log-based, consistent with the "no paid dependency" pattern M2/M3 used for the geocoder.
+
+**Tests.** Each named alarm fires (as a structured, greppable log line) under a scripted condition that should trigger it, and does not fire under a condition that shouldn't.
+
+**Out.** Real CloudWatch/SNS wiring — extraction-time concern per design's own "not now" framing for anything beyond `desiredCount = 1`.
 
 ### M5-P10 — Stretch: PAY-006 + RAT-003 (only if slack)
 

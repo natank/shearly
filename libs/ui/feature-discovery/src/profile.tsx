@@ -62,7 +62,7 @@ export function DiscoveryProfile({ providerId }: { providerId: string }) {
         {profile.portfolio[0] ? (
           <img
             src={profile.portfolio[0].url}
-            alt=""
+            alt={profile.provider.displayName}
             className="h-48 w-full rounded-md object-cover"
           />
         ) : null}

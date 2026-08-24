@@ -2,5 +2,6 @@
   "appName": "Shearly",
   "adminAppName": "Shearly Admin",
   "switchToEnglish": "English",
-  "switchToHebrew": "עברית"
+  "switchToHebrew": "עברית",
+  "skipToContent": "Skip to content"
 }

@@ -237,25 +237,33 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
           ) : null}
           <div className="flex flex-col gap-2 rounded-md border border-input p-3">
             <span className="text-sm">{t('addNewAddress')}</span>
-            <Input
-              placeholder={t('addressLabelField')}
-              value={newAddress.label}
-              onChange={(event) =>
-                setNewAddress((prev) => ({ ...prev, label: event.target.value }))
-              }
-            />
-            <Input
-              placeholder={t('addressLineField')}
-              value={newAddress.line}
-              onChange={(event) => setNewAddress((prev) => ({ ...prev, line: event.target.value }))}
-            />
-            <Input
-              placeholder={t('accessNotes')}
-              value={newAddress.accessNotes}
-              onChange={(event) =>
-                setNewAddress((prev) => ({ ...prev, accessNotes: event.target.value }))
-              }
-            />
+            <label className="flex flex-col gap-1 text-sm">
+              {t('addressLabelField')}
+              <Input
+                value={newAddress.label}
+                onChange={(event) =>
+                  setNewAddress((prev) => ({ ...prev, label: event.target.value }))
+                }
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              {t('addressLineField')}
+              <Input
+                value={newAddress.line}
+                onChange={(event) =>
+                  setNewAddress((prev) => ({ ...prev, line: event.target.value }))
+                }
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              {t('accessNotes')}
+              <Input
+                value={newAddress.accessNotes}
+                onChange={(event) =>
+                  setNewAddress((prev) => ({ ...prev, accessNotes: event.target.value }))
+                }
+              />
+            </label>
             <Button
               type="button"
               variant="outline"
@@ -287,8 +295,16 @@ export function BookingConfirm({ selection }: { selection: BookingSelection }) {
         />
       ) : null}
 
-      {errorKey ? <p className="text-sm">{t(errorKey as 'missingAddress')}</p> : null}
-      {cardErrorMessage ? <p className="text-sm">{cardErrorMessage}</p> : null}
+      {errorKey ? (
+        <p role="alert" className="text-sm">
+          {t(errorKey as 'missingAddress')}
+        </p>
+      ) : null}
+      {cardErrorMessage ? (
+        <p role="alert" className="text-sm">
+          {cardErrorMessage}
+        </p>
+      ) : null}
       {account ? (
         <Button
           type="button"

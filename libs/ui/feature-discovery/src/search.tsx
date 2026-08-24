@@ -119,7 +119,11 @@ export function DiscoverySearch() {
           {result.providers.map((card) => (
             <li key={card.id} className="flex flex-col gap-2 rounded-md border border-input p-4">
               {card.photoUrl ? (
-                <img src={card.photoUrl} alt="" className="h-32 w-full rounded-md object-cover" />
+                <img
+                  src={card.photoUrl}
+                  alt={card.displayName}
+                  className="h-32 w-full rounded-md object-cover"
+                />
               ) : null}
               <p className="font-medium">{card.displayName}</p>
               <p className="text-sm">{t('vettingBadge')}</p>

@@ -128,8 +128,8 @@ test('anonymous visitor picks a slot, authenticates mid-flow, and lands back on 
     timeout: 15_000,
   });
 
-  await page.getByPlaceholder('תווית (למשל: בית)').fill('בית');
-  await page.getByPlaceholder('כתובת').fill('tel aviv');
+  await page.getByLabel('תווית (למשל: בית)').fill('בית');
+  await page.getByLabel('כתובת', { exact: true }).fill('tel aviv');
   await page.getByRole('button', { name: 'שמירת כתובת' }).click();
 
   await expect(page.getByRole('button', { name: 'אישור ותשלום' })).toBeEnabled({
