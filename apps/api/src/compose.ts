@@ -65,7 +65,7 @@ export function compose(
       sendMail ?? createSmtpMailer(config.smtpUrl),
     ),
     availability: new AvailabilityService(pool, config.discoveryWindowDays),
-    payments: new ConnectService(pool),
+    payments: new ConnectService(pool, config.payoutCadenceDays),
     authorizations: new AuthorizationService(
       pool,
       overrides?.stripeClient ?? config.stripeSecretKey,

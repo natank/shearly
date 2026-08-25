@@ -381,6 +381,75 @@ describe('due-work poller', () => {
     expect(stripe.paymentIntents.capture).toHaveBeenCalled();
   });
 
+  it('PAY-006: a completed provider whose payout cadence has elapsed is paid out on schedule, and next_payout_at advances', async () => {
+    if (!app || !services) {
+      return;
+    }
+    const { providerId, serviceId, providerSession } = await seedListedProvider(app, services);
+    const customerSession = await registerCustomer(app);
+
+    const res = await app.request('/bookings', {
+      method: 'POST',
+      headers: {
+        cookie: customerSession,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        providerId,
+        serviceId,
+        addressLine: 'poller street 6',
+        accessNotes: '',
+        lat: 32.08,
+        lng: 34.78,
+        slotStart: nearFutureSlot(15),
+        paymentMethodId: 'pm_test',
+      }),
+    });
+    const body = (await res.json()) as { id: string };
+    const accept = await app.request(`/bookings/${body.id}/accept`, {
+      method: 'PATCH',
+      headers: { cookie: providerSession },
+    });
+    expect(accept.status).toBe(200);
+    await services.pool.query(
+      `UPDATE booking.bookings SET auto_complete_at = now() - interval '1 minute' WHERE id = $1`,
+      [body.id],
+    );
+    // Completes the booking (writes the ledger's net entry) without also
+    // claiming the payout in the same tick — `seedListedProvider`'s
+    // stub-complete already set next_payout_at 7 days out, so this first
+    // tick can only exercise auto-complete.
+    await runDueWorkOnce(services);
+
+    const provider = await services.catalog.getById(providerId);
+    const accountId = provider?.account_id as string;
+    await services.pool.query(
+      `UPDATE payments.connect_accounts SET next_payout_at = now() - interval '1 minute' WHERE account_id = $1`,
+      [accountId],
+    );
+
+    const result = await runDueWorkOnce(services);
+    expect(result.scheduledPayouts).toBeGreaterThanOrEqual(1);
+
+    const payoutRow = await services.pool.query<{ status: string; triggered_by: string }>(
+      `SELECT status, triggered_by FROM payments.payouts WHERE provider_account_id = $1`,
+      [accountId],
+    );
+    expect(payoutRow.rows[0]).toMatchObject({ status: 'succeeded', triggered_by: 'schedule' });
+
+    const accountRow = await services.pool.query<{ next_payout_at: Date }>(
+      `SELECT next_payout_at FROM payments.connect_accounts WHERE account_id = $1`,
+      [accountId],
+    );
+    expect(new Date(accountRow.rows[0].next_payout_at).getTime()).toBeGreaterThan(Date.now());
+
+    // A second tick before the newly-advanced cadence has elapsed must not
+    // reclaim the row and pay out again.
+    const secondTick = await runDueWorkOnce(services);
+    expect(secondTick.scheduledPayouts).toBe(0);
+  });
+
   it('OBS-004: does not fire the orphan-authorization alarm when nothing is claimable, and fires it when a stray row is', async () => {
     if (!app || !services) {
       return;
@@ -439,6 +508,14 @@ describe('due-work poller', () => {
       });
     } finally {
       alarms.mockRestore();
+      // The backdated reauthorize_by above stays claimable by every
+      // subsequent poller tick for the rest of this file's run (this test
+      // shares the DB with the other `it`s in this describe block) unless
+      // cleared here.
+      await services.pool.query(
+        `UPDATE payments.authorizations SET reauthorize_by = NULL WHERE booking_id = $1`,
+        [body.id],
+      );
     }
   });
 
