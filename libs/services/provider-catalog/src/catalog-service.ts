@@ -163,12 +163,66 @@ export class CatalogService {
       rating: number;
       body: string | null;
       created_at: Date;
+      reply: string | null;
+      reply_created_at: Date | null;
     }>(
-      `SELECT id, rating, body, created_at FROM catalog.reviews
+      `SELECT id, rating, body, created_at, reply, reply_created_at FROM catalog.reviews
        WHERE provider_id = $1 ORDER BY created_at DESC`,
       [providerId],
     );
     return result.rows;
+  }
+
+  /**
+   * RAT-003: the provider's own review list for the reply UI —
+   * `listReviews` is public-facing and gates on `requirePublic` (approved
+   * and listed), which would wrongly hide a provider's own reviews the
+   * moment they unlist. Ownership is the only requirement here, not
+   * public visibility.
+   */
+  async listOwnReviews(accountId: string) {
+    const provider = await this.getByAccount(accountId);
+    if (!provider) {
+      throw new NotFoundError('catalog.providerNotFound');
+    }
+    const result = await this.pool.query<{
+      id: string;
+      rating: number;
+      body: string | null;
+      created_at: Date;
+      reply: string | null;
+      reply_created_at: Date | null;
+    }>(
+      `SELECT id, rating, body, created_at, reply, reply_created_at FROM catalog.reviews
+       WHERE provider_id = $1 ORDER BY created_at DESC`,
+      [provider.id],
+    );
+    return result.rows;
+  }
+
+  /**
+   * RAT-003: a single provider-authored reply per review — reviews stay
+   * one-directional otherwise (RAT-002), this is not a threaded
+   * conversation. Authorization is scoped to the review's own provider,
+   * not just "any approved provider" — `getByAccount` plus an ownership
+   * check, the same shape as every other `/catalog/me/*` mutation.
+   */
+  async replyToReview(accountId: string, reviewId: string, reply: string): Promise<void> {
+    if (!reply.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    const provider = await this.getByAccount(accountId);
+    if (!provider) {
+      throw new NotFoundError('catalog.providerNotFound');
+    }
+    const result = await this.pool.query(
+      `UPDATE catalog.reviews SET reply = $3, reply_created_at = now()
+       WHERE id = $1 AND provider_id = $2`,
+      [reviewId, provider.id, reply.trim()],
+    );
+    if (result.rowCount === 0) {
+      throw new NotFoundError('catalog.reviewNotFound');
+    }
   }
 
   async readPublicPortfolio(providerId: string, documentId: string) {

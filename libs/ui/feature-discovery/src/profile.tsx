@@ -14,7 +14,14 @@ type Profile = {
     travelIncluded: boolean;
   }[];
   rating: { average: number | null; count: number; newProvider: boolean };
-  reviews: { id: string; rating: number; body: string | null; createdAt: string }[];
+  reviews: {
+    id: string;
+    rating: number;
+    body: string | null;
+    createdAt: string;
+    reply: string | null;
+    replyCreatedAt: string | null;
+  }[];
   portfolio: { id: string; url: string }[];
   nextSlots: { start: string; end: string }[];
 };
@@ -112,10 +119,19 @@ export function DiscoveryProfile({ providerId }: { providerId: string }) {
         {profile.reviews.length ? (
           <ul className="flex flex-col gap-2 text-sm">
             {profile.reviews.map((review) => (
-              <li key={review.id}>
-                {review.rating}
-                {'/5'}
-                {review.body ? ` · ${review.body}` : ''}
+              <li key={review.id} className="flex flex-col gap-1">
+                <span>
+                  {review.rating}
+                  {'/5'}
+                  {review.body ? ` · ${review.body}` : ''}
+                </span>
+                {review.reply ? (
+                  <p className="ps-3 text-sm">
+                    {t('providerReply')}
+                    {': '}
+                    {review.reply}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
