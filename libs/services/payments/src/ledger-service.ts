@@ -214,4 +214,85 @@ export class LedgerService {
     );
     return Number(result.rows[0]?.total ?? 0);
   }
+
+  /**
+   * PAY-006: account_ids whose cadence clock (design §6.6's due-work table,
+   * "schedule due") has elapsed. `next_payout_at` is only ever set on a
+   * `complete` Connect account (see connect-service.ts's `completeStub`),
+   * so the `status` filter here is belt-and-suspenders against a future
+   * writer that doesn't observe that invariant.
+   */
+  async accountsDueForScheduledPayout(now: Date): Promise<string[]> {
+    const result = await this.pool.query<{ account_id: string }>(
+      `SELECT account_id FROM payments.connect_accounts
+       WHERE status = 'complete' AND next_payout_at IS NOT NULL AND next_payout_at <= $1`,
+      [now],
+    );
+    return result.rows.map((row) => row.account_id);
+  }
+
+  /**
+   * PAY-006: the poller's per-tick counterpart to `triggerPayout` (OPS-005's
+   * admin-triggered path). Unlike `triggerPayout`, a zero pending balance is
+   * not an error here — the poller runs unconditionally on cadence, and a
+   * provider with no completed bookings that week is an expected, routine
+   * outcome, not a failure. Either way `next_payout_at` advances by one
+   * cadence period so the row is not reclaimed on the next tick.
+   */
+  async triggerScheduledPayout(
+    providerAccountId: string,
+    bookingIdsForAccount: string[],
+    payoutCadenceDays: number,
+  ): Promise<Payout | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const netResult = await client.query<{ total: string | null }>(
+        `SELECT COALESCE(SUM(amount_minor), 0)::text AS total
+         FROM payments.ledger
+         WHERE kind = 'net' AND booking_id = ANY($1::uuid[])`,
+        [bookingIdsForAccount],
+      );
+      const gross = Number(netResult.rows[0]?.total ?? 0);
+      const paidOutResult = await client.query<{ total: string | null }>(
+        `SELECT COALESCE(SUM(amount_minor), 0)::text AS total
+         FROM payments.payouts
+         WHERE provider_account_id = $1 AND status = 'succeeded'`,
+        [providerAccountId],
+      );
+      const pendingMinor = gross - Number(paidOutResult.rows[0]?.total ?? 0);
+
+      let payout: Payout | null = null;
+      if (pendingMinor > 0) {
+        const inserted = await client.query<{
+          id: string;
+          provider_account_id: string;
+          amount_minor: number;
+          status: 'pending' | 'succeeded' | 'failed';
+          triggered_by: 'admin' | 'schedule';
+          created_at: Date;
+        }>(
+          `INSERT INTO payments.payouts (provider_account_id, amount_minor, status, triggered_by)
+           VALUES ($1, $2, 'succeeded', 'schedule')
+           RETURNING *`,
+          [providerAccountId, pendingMinor],
+        );
+        payout = toPayout(inserted.rows[0]);
+      }
+
+      await client.query(
+        `UPDATE payments.connect_accounts
+         SET next_payout_at = next_payout_at + make_interval(days => $2)
+         WHERE account_id = $1`,
+        [providerAccountId, payoutCadenceDays],
+      );
+      await client.query('COMMIT');
+      return payout;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }

@@ -4,7 +4,10 @@ import { insertOutboxEvent } from '@shearly/shared-events';
 export type ConnectStatus = 'not_started' | 'pending' | 'complete';
 
 export class ConnectService {
-  constructor(private readonly pool: pg.Pool) {}
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly payoutCadenceDays = 7,
+  ) {}
 
   async getStatus(
     accountId: string,
@@ -42,11 +45,19 @@ export class ConnectService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // PAY-006: onboarding completion is the earliest point a scheduled
+      // payout is ever possible, so the cadence clock starts here.
       await client.query(
-        `INSERT INTO payments.connect_accounts (account_id, status)
-         VALUES ($1, 'complete')
-         ON CONFLICT (account_id) DO UPDATE SET status = 'complete', updated_at = now()`,
-        [accountId],
+        `INSERT INTO payments.connect_accounts (account_id, status, next_payout_at)
+         VALUES ($1, 'complete', now() + make_interval(days => $2))
+         ON CONFLICT (account_id) DO UPDATE
+           SET status = 'complete',
+               updated_at = now(),
+               next_payout_at = COALESCE(
+                 payments.connect_accounts.next_payout_at,
+                 now() + make_interval(days => $2)
+               )`,
+        [accountId, this.payoutCadenceDays],
       );
       await insertOutboxEvent(client, 'payments', 'PayoutAccountReady', { accountId });
       await client.query('COMMIT');

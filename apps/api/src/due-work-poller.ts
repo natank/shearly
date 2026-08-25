@@ -38,6 +38,10 @@ type DueReminderRow = QueryResultRow & {
   booking_id: string;
 };
 
+type DuePayoutAccountRow = QueryResultRow & {
+  account_id: string;
+};
+
 /**
  * Claims and transitions due bookings for one event (`ResponseDeadlinePassed`
  * or `AutoCompleteElapsed`). `executeEffects()` deliberately runs *after*
@@ -208,6 +212,58 @@ async function sendDueReminders(
 }
 
 /**
+ * PAY-006: claims `payments.connect_accounts` rows whose cadence clock has
+ * elapsed (design §6.6's due-work table, "schedule due"). Same
+ * commit-then-act split as `sendDueReminders`: `triggerScheduledPayout`
+ * runs after the claim transaction commits, on a separate connection, so a
+ * Stripe-equivalent failure there can never block the claim itself.
+ * `LedgerService.triggerScheduledPayout` always advances `next_payout_at`
+ * (even for a zero balance) so a quiet account is not reclaimed forever.
+ */
+async function sendDuePayouts(
+  services: AppServices,
+  now: Date,
+): Promise<{ succeeded: number; failed: number }> {
+  const toPayFor: DuePayoutAccountRow[] = [];
+
+  await claimDueWork<DuePayoutAccountRow>(
+    services.pool,
+    {
+      claimSql: `SELECT account_id FROM payments.connect_accounts
+                 WHERE status = 'complete' AND next_payout_at IS NOT NULL AND next_payout_at <= $1
+                 ORDER BY next_payout_at
+                 LIMIT 1
+                 FOR UPDATE SKIP LOCKED`,
+      claimParams: [now],
+      markDone: async () => undefined,
+      markFailed: async () => undefined,
+    },
+    async (_client, row) => {
+      toPayFor.push(row);
+    },
+  );
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const row of toPayFor) {
+    try {
+      const provider = await services.catalog.getByAccount(row.account_id);
+      const bookings = provider ? await services.booking.listByProvider(provider.id) : [];
+      await services.ledger.triggerScheduledPayout(
+        row.account_id,
+        bookings.map((booking) => booking.id),
+        services.config.payoutCadenceDays,
+      );
+      succeeded += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+/**
  * design §6.6: claims `PENDING` bookings past `response_deadline` and
  * `CONFIRMED` bookings past `auto_complete_at`, running each through the
  * same `transition()` the live HTTP routes use — the state machine has no
@@ -219,6 +275,10 @@ async function sendDueReminders(
  * environment ever produces a `SETUP_ONLY` row with those columns set, so
  * this claim exists for when Stripe test-mode work fills that in, not
  * because it does anything yet).
+ *
+ * `payments.connect_accounts` rows past `next_payout_at` are claimed for
+ * PAY-006's scheduled payout cadence, on top of M5-P7's admin-triggered
+ * `triggerPayout` — see `sendDuePayouts`.
  */
 export async function runDueWorkOnce(services: AppServices): Promise<{
   expiredBookings: number;
@@ -226,6 +286,7 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
   failedBookings: number;
   claimedAuthorizations: number;
   remindersSent: number;
+  scheduledPayouts: number;
 }> {
   const now = new Date();
 
@@ -287,13 +348,16 @@ export async function runDueWorkOnce(services: AppServices): Promise<{
   );
 
   const remindersSent = await sendDueReminders(services, now);
+  const scheduledPayouts = await sendDuePayouts(services, now);
 
   return {
     expiredBookings: expiry.succeeded,
     autoCompletedBookings: autoComplete.succeeded,
-    failedBookings: expiry.failed + autoComplete.failed + remindersSent.failed,
+    failedBookings:
+      expiry.failed + autoComplete.failed + remindersSent.failed + scheduledPayouts.failed,
     claimedAuthorizations: deferredAuth.claimed,
     remindersSent: remindersSent.succeeded,
+    scheduledPayouts: scheduledPayouts.succeeded,
   };
 }
 
