@@ -3,3 +3,4 @@ export { ProviderDashboard } from './dashboard';
 export { VettingQueue } from './vetting-queue';
 export { ProviderEarnings } from './earnings';
 export { ProviderBookings } from './bookings';
+export { ProviderReviews } from './reviews';

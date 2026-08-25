@@ -62,5 +62,11 @@
   "reportCustomerNoShow": "Customer did not show",
   "cancelBooking": "Cancel booking",
   "bookingActionFailed": "That did not go through. Try again.",
+  "reviews": "Reviews",
+  "noReviews": "No reviews yet.",
+  "replyLabel": "Your reply",
+  "replySubmit": "Post reply",
+  "replyError": "That did not go through. Try again.",
+  "yourReply": "Your reply",
   "loading": "Loading…"
 }

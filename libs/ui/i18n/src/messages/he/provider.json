@@ -62,5 +62,11 @@
   "reportCustomerNoShow": "הלקוח לא הגיע",
   "cancelBooking": "ביטול ההזמנה",
   "bookingActionFailed": "הפעולה לא הצליחה. נסו שוב.",
+  "reviews": "ביקורות",
+  "noReviews": "עדיין אין ביקורות.",
+  "replyLabel": "התגובה שלכם",
+  "replySubmit": "פרסום תגובה",
+  "replyError": "הפעולה לא הצליחה. נסו שוב.",
+  "yourReply": "התגובה שלכם",
   "loading": "טוען…"
 }

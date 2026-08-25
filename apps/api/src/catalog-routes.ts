@@ -159,6 +159,36 @@ export function createCatalogRoutes(
     return c.json({ listed: updated.listed, ...status });
   });
 
+  routes.get('/catalog/me/reviews', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const reviews = await catalog.listOwnReviews(account.id);
+    return c.json({
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        rating: review.rating,
+        body: review.body,
+        createdAt: review.created_at,
+        reply: review.reply,
+        replyCreatedAt: review.reply_created_at,
+      })),
+    });
+  });
+
+  // RAT-003: a provider replies publicly to one of their own reviews.
+  // Ownership is enforced inside replyToReview (the review must belong to
+  // the calling account's own provider), not just "any authenticated
+  // provider" — the UUID route param alone says nothing about ownership.
+  routes.post('/catalog/me/reviews/:reviewId/reply', async (c) => {
+    const account = await requireProvider(c, identity, config);
+    const reviewId = requireUuidParam(c, 'reviewId');
+    const body = (await c.req.json().catch(() => null)) as { reply?: string } | null;
+    if (typeof body?.reply !== 'string' || !body.reply.trim()) {
+      throw new ValidationError('errors.validation');
+    }
+    await catalog.replyToReview(account.id, reviewId, body.reply);
+    return c.json({ ok: true });
+  });
+
   routes.post('/payments/me/connect/start', async (c) => {
     const account = await requireProvider(c, identity, config);
     if (!extras) {
@@ -254,6 +284,8 @@ export function createCatalogRoutes(
         rating: review.rating,
         body: review.body,
         createdAt: review.created_at,
+        reply: review.reply,
+        replyCreatedAt: review.reply_created_at,
       })),
       portfolio: photos.map((photo) => ({
         id: photo.id,
